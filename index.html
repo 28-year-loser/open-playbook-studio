@@ -103,6 +103,19 @@ kbd{
 .player text{font-family:-apple-system,"PingFang SC",sans-serif;font-weight:700;pointer-events:none}
 .route-hit{stroke:transparent;stroke-width:16;fill:none;cursor:pointer}
 
+/* 区域防守：默认淡化，悬停归属球员高亮（背景+高亮边框） */
+.zone-cov .zone-shape{
+  fill:rgba(80,170,255,.13); stroke:rgba(130,195,255,.5);
+  stroke-width:2; stroke-dasharray:6 4;
+  transition:fill .16s ease, stroke .16s ease, stroke-width .16s ease;
+}
+.zone-cov.hot .zone-shape{
+  fill:rgba(95,185,255,.32); stroke:#d6ecff;
+  stroke-width:3; stroke-dasharray:none;
+}
+.zone-cov .zone-label{fill:#7fa8c8; opacity:.55; transition:opacity .16s ease, fill .16s ease}
+.zone-cov.hot .zone-label{fill:#eaf6ff; opacity:1}
+
 /* ===== 底栏 ===== */
 footer{
   display:flex;align-items:center;gap:10px;padding:8px 14px;
@@ -1765,13 +1778,13 @@ function render() {
     g.addEventListener("pointerenter", () => {
       if (String(state.hoverPlayer) !== String(p.id)) {
         state.hoverPlayer = p.id;
-        updateManCovVisibility();
+        updateHoverVisuals();
       }
     });
     g.addEventListener("pointerleave", () => {
       if (String(state.hoverPlayer) === String(p.id)) {
         state.hoverPlayer = null;
-        updateManCovVisibility();
+        updateHoverVisuals();
       }
     });
   });
@@ -1940,32 +1953,37 @@ function drawDefense(g) {
   const df = state.defense;
   if (!df) return;
 
-  // 1) 区域防守范围（矩形或圆形半透明区域）
+  // 1) 区域防守范围（矩形或圆形）：默认淡化，悬停归属球员时高亮
   (df.zones || []).forEach(z => {
+    const ownerHot = (z.player == null) || String(state.hoverPlayer) === String(z.player);
+    const gg = el("g", {
+      class: "zone-cov" + (ownerHot ? " hot" : ""),
+      "data-player": (z.player != null ? z.player : "")
+    }, g);
     if (z.shape === "circle") {
       el("ellipse", {
-        cx: z.cx, cy: z.cy, rx: z.rx, ry: z.ry,
-        fill: "rgba(80,170,255,.18)", stroke: "#5ab0ff",
-        "stroke-width": 2, "stroke-dasharray": "6 4"
-      }, g);
+        class: "zone-shape",
+        cx: z.cx, cy: z.cy, rx: z.rx, ry: z.ry
+      }, gg);
       if (z.label) {
         const t = el("text", {
+          class: "zone-label",
           x: z.cx, y: z.cy - z.ry + 16, "text-anchor": "middle",
-          fill: "#bfe3ff", "font-size": 12, "font-weight": 700
-        }, g);
+          "font-size": 12, "font-weight": 700
+        }, gg);
         t.textContent = z.label;
       }
     } else {
       el("rect", {
-        x: z.x, y: z.y, width: z.w, height: z.h,
-        fill: "rgba(80,170,255,.18)", stroke: "#5ab0ff",
-        "stroke-width": 2, "stroke-dasharray": "6 4", rx: 6
-      }, g);
+        class: "zone-shape",
+        x: z.x, y: z.y, width: z.w, height: z.h, rx: 6
+      }, gg);
       if (z.label) {
         const t = el("text", {
+          class: "zone-label",
           x: z.x + 8, y: z.y + 18,
-          fill: "#bfe3ff", "font-size": 12, "font-weight": 700
-        }, g);
+          "font-size": 12, "font-weight": 700
+        }, gg);
         t.textContent = z.label;
       }
     }
@@ -2020,12 +2038,17 @@ function drawDefense(g) {
   });
 }
 
-// 悬停切换盯人连线显隐（不整屏重渲染，避免闪烁）
-function updateManCovVisibility() {
+// 悬停切换：盯人连线显隐 + 区域防守高亮（不整屏重渲染，避免闪烁）
+function updateHoverVisuals() {
   const hv = String(state.hoverPlayer);
   document.querySelectorAll("#layerDefense .man-cov").forEach(gg => {
     const a = gg.getAttribute("data-def"), b = gg.getAttribute("data-off");
     gg.style.display = (hv === String(a) || hv === String(b)) ? "" : "none";
+  });
+  document.querySelectorAll("#layerDefense .zone-cov").forEach(gg => {
+    const pl = gg.getAttribute("data-player");
+    const hot = (pl === "") || hv === String(pl);
+    gg.classList.toggle("hot", hot);
   });
 }
 
@@ -2914,17 +2937,24 @@ $("#btnUndo").onclick = undo;
 $("#btnRedo").onclick = redo;
 
 $("#btnClear").onclick = () => {
-  if (!state.routes.length) return toast("当前没有路线");
+  const zn = (state.defense.zones || []).length;
+  const mn = Object.keys(state.defense.manAssign || {}).length;
+  if (!state.routes.length && !zn && !mn) return toast("当前没有可清除的标记");
   pushUndo();
   state.routes = [];
+  state.defense.zones = [];      // 清空区域防守范围，不留残留
+  state.defense.manAssign = {};  // 清空盯人关系，不留残留
+  state.selectedRoute = null; state.routeEdit = false;
   render(); updateStats();
-  toast("已清空所有路线");
+  toast("已清空路线与防守标记（区域/盯人）");
 };
 
 $("#btnReset").onclick = () => {
-  if (!confirm("确定要重置整个战术吗？球员和路线都会清空。")) return;
+  if (!confirm("确定要重置整个战术吗？球员、路线和防守标记都会清空。")) return;
   pushUndo();
   state.players = []; state.routes = []; state.selected = null; state.drawing = null;
+  state.defense.zones = []; state.defense.manAssign = {};   // 防守标记一并清除
+  state.selectedRoute = null; state.routeEdit = false;
   render(); updateStats();
   toast("已重置");
 };
