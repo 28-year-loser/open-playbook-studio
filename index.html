@@ -117,6 +117,92 @@ footer{
 .pill.warn{color:var(--accent2);border-color:#5c4520}
 
 /* ===== Toast ===== */
+/* ===== 球员操作菜单 ===== */
+#playerMenu{
+  position:fixed; z-index:60; min-width:168px;
+  background:#1c2732; border:1px solid #3d5163; border-radius:11px;
+  box-shadow:0 14px 40px rgba(0,0,0,.5); overflow:hidden;
+  opacity:0; pointer-events:none; transform:translateY(-6px) scale(.97);
+  transition:opacity .13s, transform .13s;
+}
+#playerMenu.show{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
+#playerMenu .pm-head{
+  padding:9px 13px; background:#24313d; border-bottom:1px solid #334655;
+  font-size:12px; color:#9fb0c0;
+}
+#playerMenu .pm-head b{color:#fff;font-size:13.5px}
+#playerMenu .pm-item{
+  display:flex; align-items:center; gap:9px;
+  padding:9px 13px; font-size:12.5px; cursor:pointer;
+  border-left:3px solid transparent; color:var(--fg);
+}
+#playerMenu .pm-item:hover{background:#2a3a48;border-left-color:var(--accent)}
+#playerMenu .pm-item.danger:hover{background:#3a2226;border-left-color:var(--danger)}
+#playerMenu .pm-item .k{
+  margin-left:auto; font-size:9.5px; color:#7d8fa0;
+  background:#16202a; padding:2px 6px; border-radius:4px;
+}
+#playerMenu .pm-sep{height:1px;background:#2e3a46;margin:3px 0}
+#playerMenu .pm-item.active{background:#2b4256;border-left-color:var(--accent2)}
+
+/* ===== 阵型管理：新建 / 重命名 弹窗 ===== */
+.fitem{
+  display:flex; align-items:center; gap:6px;
+}
+.fitem .fbtn{
+  flex:1; text-align:left; padding:8px 10px; border-radius:7px;
+  font-size:12.5px; display:flex; justify-content:space-between; align-items:center;
+}
+.fitem .fedit{
+  flex-shrink:0; width:27px; height:27px; padding:0; border-radius:6px;
+  display:grid; place-items:center; font-size:11px; opacity:.45;
+}
+.fitem:hover .fedit{opacity:1}
+.fadd{
+  width:100%; text-align:left; padding:8px 10px; border-radius:7px;
+  font-size:12.5px; color:var(--accent); border:1px dashed #3a5a74;
+  background:transparent;
+}
+.fadd:hover{background:#1b2f3f;border-color:var(--accent)}
+
+.modal-mask{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  z-index:80; display:none; align-items:center; justify-content:center;
+}
+.modal-mask.show{display:flex}
+.modal-card{
+  width:min(460px, 92vw); max-height:86vh; overflow-y:auto;
+  background:#1a222c; border:1px solid #3a4c5c; border-radius:13px;
+  padding:19px; box-shadow:0 22px 70px rgba(0,0,0,.55);
+}
+.modal-title{font-size:15.5px;font-weight:700;margin-bottom:3px}
+.modal-sub{font-size:11.5px;color:var(--fg2);margin-bottom:15px}
+.modal-card label{font-size:11px;color:var(--fg2);display:block;margin:13px 0 5px}
+.modal-card input[type=text]{
+  width:100%; padding:9px 11px; font-size:13px;
+  background:#121a22; border:1px solid #334655; border-radius:8px; color:var(--fg);
+}
+.tpl-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding-right:3px}
+.tpl-item{
+  display:flex; gap:9px; align-items:flex-start;
+  padding:9px 11px; border:1px solid #2e3f4e; border-radius:8px;
+  cursor:pointer; background:#121a22;
+}
+.tpl-item:hover{border-color:#4a6b85;background:#18242e}
+.tpl-item.on{border-color:var(--accent);background:#1b3348}
+.tpl-item input{margin-top:3px;accent-color:var(--accent)}
+.tpl-item .tname{font-size:12.5px;font-weight:600}
+.tpl-item .tnote{font-size:10.5px;color:var(--fg2);margin-top:2px;line-height:1.45}
+.tpl-item .tbadge{
+  margin-left:auto; flex-shrink:0; font-size:9.5px; padding:2px 7px;
+  border-radius:5px; background:#20303c; color:#8fb3cc;
+}
+.tpl-item .tbadge.blank{background:#3a2c1c;color:#e0b070}
+.modal-actions{display:flex;gap:9px;margin-top:19px}
+.modal-actions button{flex:1;padding:10px;font-size:13px;border-radius:8px}
+.modal-actions .primary{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:700}
+.modal-actions .primary:hover{background:#63b3ff}
+
 #toast{
   position:fixed;left:50%;bottom:70px;transform:translateX(-50%) translateY(12px);
   background:#20303e;color:var(--fg);padding:10px 17px;border-radius:9px;
@@ -193,11 +279,19 @@ footer{
       <div class="aside-h">防守阵型</div>
       <div class="formation-list" id="defFormations"></div>
 
+      <div class="aside-h">路线终点标记</div>
+      <div class="field-note" style="margin-bottom:12px">
+        <b>传球</b> → 实心箭头 ▶<br>
+        <b>跑动</b> → 空心圆 ○<br>
+        <b>阻挡</b> → T 字 ─┴─
+      </div>
+
       <div class="aside-h">快捷键</div>
       <div class="field-note">
         <b>V</b> 选择 · <b>R</b> 跑动 · <b>P</b> 传球<br>
         <b>B</b> 阻挡 · <b>X</b> 删除<br>
-        <b>Ctrl+Z</b> 撤销 · <b>Ctrl+Y</b> 重做<br>
+        <b>Ctrl+Z</b> 选中球员→只撤该球员<br>
+        <b>Ctrl+Shift+Z</b> 全局重做<br>
         画路线：<b>点球员 → 点折点 → 双击收尾</b>
       </div>
     </div>
@@ -227,6 +321,20 @@ footer{
     </div>
 
     <div class="col">
+      <div class="aside-h">选中对象</div>
+      <div class="field-note" id="selInfo" style="margin-bottom:9px">
+        未选中任何球员。<br>点球员后可在此单独撤销它。
+      </div>
+      <div class="row">
+        <button id="btnUndoPlayer" disabled>⟲ 撤销此球员</button>
+      </div>
+      <div class="row">
+        <button id="btnUndoPlayerAll" disabled>⟲⟲ 全部退回</button>
+      </div>
+      <div class="row">
+        <button id="btnDelPlayer" class="warn" disabled>✕ 删除此球员</button>
+      </div>
+
       <div class="aside-h">画布</div>
       <div class="row">
         <button id="btnMirror">⇄ 左右镜像</button>
@@ -258,6 +366,47 @@ footer{
 </footer>
 
 <div id="toast"></div>
+
+<div id="playerMenu">
+  <div class="pm-head" id="pmHead"><b>球员</b></div>
+  <div class="pm-item" data-act="move">✋&nbsp; 移动球员<span class="k">V</span></div>
+  <div class="pm-item" data-act="run">🏃&nbsp; 画跑动路线<span class="k">R</span></div>
+  <div class="pm-item" data-act="pass">🎯&nbsp; 画传球路线<span class="k">P</span></div>
+  <div class="pm-item" data-act="block">🧱&nbsp; 画阻挡路线<span class="k">B</span></div>
+  <div class="pm-sep"></div>
+  <div class="pm-item" data-act="undo">↩️&nbsp; 撤销此球员移动<span class="k">Ctrl+Z</span></div>
+  <div class="pm-item" data-act="undoAll">⟲⟲&nbsp; 退回初始位置</div>
+  <div class="pm-sep"></div>
+  <div class="pm-item danger" data-act="del">🗑️&nbsp; 删除此球员</div>
+</div>
+
+<div class="modal-mask" id="formModal">
+  <div class="modal-card">
+    <div class="modal-title" id="fmTitle">新建进攻阵型</div>
+    <div class="modal-sub" id="fmSub">选择一个模板作为起点，或从空白开始自由布阵。</div>
+    <label>阵型名称</label>
+    <input type="text" id="fmName" placeholder="例：My Trips Right" maxlength="28">
+    <label id="fmTplLabel">选择模板</label>
+    <div class="tpl-list" id="fmTemplates"></div>
+    <div class="modal-actions">
+      <button id="fmCancel">取消</button>
+      <button id="fmOk" class="primary">创建阵型</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="renameModal">
+  <div class="modal-card">
+    <div class="modal-title">重命名阵型</div>
+    <div class="modal-sub" id="rnSub">修改该阵型在列表中显示的名称。</div>
+    <label>新名称</label>
+    <input type="text" id="rnName" maxlength="28">
+    <div class="modal-actions">
+      <button id="rnCancel">取消</button>
+      <button id="rnOk" class="primary">保存名称</button>
+    </div>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -618,24 +767,169 @@ const FORMATIONS = {
   }
 };
 
+// ============================================================
+//  系统预置模板库（新建阵型时可选）
+// ============================================================
+const PRESETS = {
+  11: {
+    off: [
+      { name: "Singleback", note: "单跑卫，3 外接手 + 1 近端锋", pts: [[.28,.50],[.22,.50],[.30,.18],[.30,.30],[.30,.70],[.30,.82],[.33,.24],[.33,.36],[.33,.50],[.33,.64],[.33,.76]], nums: ["QB","RB","WR","WR","WR","TE","LT","LG","C","RG","RT"] },
+      { name: "Pistol", note: "手枪阵，跑卫在 QB 后方", pts: [[.27,.50],[.21,.50],[.30,.18],[.30,.30],[.30,.70],[.30,.82],[.33,.24],[.33,.36],[.33,.50],[.33,.64],[.33,.76]], nums: ["QB","RB","WR","WR","WR","TE","LT","LG","C","RG","RT"] },
+      { name: "Empty Backfield", note: "空后场，5 外接手", pts: [[.24,.50],[.30,.16],[.30,.28],[.30,.42],[.30,.58],[.30,.72],[.33,.24],[.33,.36],[.33,.50],[.33,.64],[.33,.76]], nums: ["QB","WR","WR","WR","WR","WR","LT","LG","C","RG","RT"] },
+      { name: "Wildcat", note: "野猫阵，直接 snap 给跑卫", pts: [[.24,.50],[.30,.50],[.30,.18],[.30,.30],[.30,.70],[.30,.82],[.33,.24],[.33,.36],[.33,.50],[.33,.64],[.33,.76]], nums: ["QB","RB","WR","WR","WR","TE","LT","LG","C","RG","RT"] },
+      { name: "Spread 2x2", note: "散弹枪 2x2 散开", pts: [[.23,.50],[.17,.50],[.31,.18],[.31,.30],[.33,.24],[.33,.36],[.33,.50],[.33,.64],[.33,.76],[.31,.70],[.31,.82]], nums: ["QB","RB","WR","WR","LT","LG","C","RG","RT","WR","WR"] },
+      { name: "Bunch Left", note: "左侧簇群", pts: [[.27,.50],[.21,.50],[.29,.22],[.30,.30],[.31,.38],[.30,.80],[.33,.24],[.33,.36],[.33,.50],[.33,.64],[.33,.76]], nums: ["QB","RB","WR","WR","WR","TE","LT","LG","C","RG","RT"] }
+    ],
+    def: [
+      { name: "5-2 Defense", note: "五人锋线，强防冲球", pts: [[.39,.30],[.39,.40],[.39,.50],[.39,.60],[.39,.70],[.48,.42],[.48,.58],[.58,.26],[.58,.50],[.58,.74],[.54,.86]], nums: ["DE","DT","NG","DT","DE","LB","LB","CB","S","CB","NB"] },
+      { name: "Tampa 2", note: "两深卫区域", pts: [[.40,.36],[.40,.50],[.40,.64],[.48,.38],[.48,.50],[.48,.62],[.58,.22],[.62,.50],[.58,.78],[.52,.34],[.52,.66]], nums: ["DE","DT","DE","LB","MLB","LB","CB","S","CB","NB","NB"] },
+      { name: "Prevent", note: "防长传，多深卫", pts: [[.42,.42],[.42,.50],[.42,.58],[.50,.44],[.50,.56],[.60,.22],[.62,.40],[.62,.60],[.60,.78],[.56,.32],[.56,.68]], nums: ["DE","NG","DE","LB","LB","CB","S","S","CB","NB","NB"] },
+      { name: "Bear 4-6", note: "重型前线", pts: [[.38,.32],[.38,.42],[.38,.50],[.38,.58],[.38,.68],[.47,.38],[.47,.50],[.47,.62],[.58,.30],[.58,.50],[.58,.70]], nums: ["DE","DT","NG","DT","DE","LB","MLB","LB","CB","S","CB"] },
+      { name: "Wide-9", note: "外侧突袭", pts: [[.37,.26],[.40,.40],[.40,.50],[.40,.60],[.37,.74],[.48,.40],[.48,.60],[.58,.26],[.58,.50],[.58,.74],[.52,.86]], nums: ["DE","DT","NG","DT","DE","LB","LB","CB","S","CB","NB"] }
+    ]
+  },
+  8: {
+    off: [
+      { name: "Power I", note: "强力 I 阵，3 后卫", pts: [[.28,.50],[.33,.32],[.33,.42],[.33,.50],[.33,.58],[.33,.68],[.24,.50],[.19,.50]], nums: ["QB","LT","LG","C","RG","RT","FB","TB"] },
+      { name: "8-Man Spread", note: "散开阵", pts: [[.22,.50],[.16,.50],[.31,.22],[.31,.38],[.31,.50],[.31,.62],[.31,.78],[.27,.86]], nums: ["QB","RB","WR","LT","C","RT","WR","WR"] },
+      { name: "Double Tight", note: "双近端锋", pts: [[.28,.50],[.33,.30],[.33,.42],[.33,.50],[.33,.58],[.33,.70],[.24,.50],[.20,.40]], nums: ["QB","LT","LG","C","RG","RT","FB","TB"] }
+    ],
+    def: [
+      { name: "3-3-2", note: "均衡八人防守", pts: [[.40,.38],[.40,.50],[.40,.62],[.48,.32],[.48,.50],[.48,.68],[.58,.34],[.58,.66]], nums: ["DE","NG","DE","LB","MLB","LB","CB","CB"] },
+      { name: "2-4-2", note: "双锋线四线卫", pts: [[.40,.42],[.40,.58],[.48,.32],[.48,.44],[.48,.56],[.48,.68],[.58,.38],[.58,.62]], nums: ["NG","NG","LB","LB","LB","LB","CB","CB"] },
+      { name: "Prevent 8", note: "防长传", pts: [[.44,.42],[.44,.50],[.44,.58],[.52,.36],[.52,.50],[.52,.64],[.62,.30],[.62,.70]], nums: ["DE","NG","DE","LB","LB","LB","CB","CB"] }
+    ]
+  },
+  5: {
+    off: [
+      { name: "Spread 2x2", note: "QB + 跑卫 + 3 外接手", pts: [[.26,.50],[.18,.50],[.32,.26],[.32,.42],[.32,.66]], nums: ["QB","RB","WR","WR","WR"] },
+      { name: "Empty", note: "空后场全接球", pts: [[.24,.50],[.31,.22],[.31,.38],[.31,.62],[.31,.78]], nums: ["QB","WR","WR","WR","WR"] },
+      { name: "Double Back", note: "双跑卫", pts: [[.28,.50],[.22,.42],[.22,.58],[.32,.32],[.32,.68]], nums: ["QB","RB","RB","WR","WR"] }
+    ],
+    def: [
+      { name: "3-2 Rush", note: "三人压迫", pts: [[.42,.34],[.42,.50],[.42,.66],[.52,.42],[.52,.58]], nums: ["R","R","R","CB","CB"] },
+      { name: "Prevent 5", note: "防长传", pts: [[.46,.42],[.46,.58],[.58,.28],[.58,.50],[.58,.72]], nums: ["R","R","S","S","S"] }
+    ]
+  }
+};
+
+// ============================================================
+//  自定义阵型 + 重命名（localStorage 持久化）
+// ============================================================
+const FORM_STORE_KEY = "obs-formations-v1";
+state.custom = { 11: { off: [], def: [] }, 8: { off: [], def: [] }, 5: { off: [], def: [] } };
+state.renames = {};
+
+function loadFormStore() {
+  try {
+    const raw = localStorage.getItem(FORM_STORE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (d.custom) {
+      for (const f of ["11","8","5"])
+        for (const s of ["off","def"])
+          if (d.custom[f] && Array.isArray(d.custom[f][s]))
+            state.custom[f][s] = d.custom[f][s];
+    }
+    if (d.renames && typeof d.renames === "object") state.renames = d.renames;
+  } catch (err) { console.warn("载入自定义阵型失败", err); }
+}
+function saveFormStore() {
+  try {
+    localStorage.setItem(FORM_STORE_KEY, JSON.stringify({
+      custom: state.custom, renames: state.renames
+    }));
+  } catch (err) { console.warn("保存自定义阵型失败", err); }
+}
+
+// 组合：内置 + 自定义；并应用重命名
+function getFormations(fmt, side) {
+  const out = [];
+  (FORMATIONS[fmt][side] || []).forEach((f, i) => {
+    const key = `b-${fmt}-${side}-${i}`;
+    out.push({ ...f, key, builtin: true, name: state.renames[key] || f.name });
+  });
+  (state.custom[fmt][side] || []).forEach(f => {
+    out.push({ ...f, builtin: false, name: state.renames[f.key] || f.name });
+  });
+  return out;
+}
+
+let nextFormKey = 1;
+function makeFormKey() { return "c-" + Date.now().toString(36) + "-" + (nextFormKey++); }
+
+function newFormation(fmt, side, name, template) {
+  const need = parseInt(fmt, 10);
+  let pts, nums;
+  if (template) {
+    pts = template.pts.map(p => [...p]);
+    nums = [...template.nums];
+  } else {
+    // 空白模板：生成等距占位球员，方便直接拖动布阵
+    pts = []; nums = [];
+    for (let i = 0; i < need; i++) {
+      const t = need === 1 ? 0.5 : i / (need - 1);
+      pts.push([0.22 + t * 0.16, 0.18 + t * 0.64]);
+      nums.push(String(i + 1));
+    }
+  }
+  const form = {
+    key: makeFormKey(),
+    name: name || "新阵型",
+    note: template ? `基于模板「${template.name}」` : `空白模板（${need} 个占位球员）`,
+    pts, nums
+  };
+  if (!state.custom[fmt]) state.custom[fmt] = { off: [], def: [] };
+  if (!state.custom[fmt][side]) state.custom[fmt][side] = [];
+  state.custom[fmt][side].push(form);
+  saveFormStore();
+  return form;
+}
+function renameFormation(key, newName) {
+  if (!newName || !newName.trim()) return false;
+  state.renames[key] = newName.trim();
+  saveFormStore();
+  return true;
+}
+function deleteFormation(key) {
+  for (const f of ["11","8","5"])
+    for (const s of ["off","def"]) {
+      const arr = state.custom[f][s] || [];
+      const i = arr.findIndex(x => x.key === key);
+      if (i >= 0) { arr.splice(i, 1); saveFormStore(); return true; }
+    }
+  if (state.renames[key]) { delete state.renames[key]; saveFormStore(); return true; }
+  return false;
+}
+
 function renderFormationButtons() {
-  const f = FORMATIONS[state.format];
   const off = $("#offFormations"), def = $("#defFormations");
   off.innerHTML = ""; def.innerHTML = "";
 
-  f.off.forEach((form, i) => {
-    const b = document.createElement("button");
-    b.innerHTML = `<span>${form.name}</span><span class="tag">进攻</span>`;
-    b.title = form.note;
-    b.onclick = () => applyFormation(form, "off");
-    off.appendChild(b);
-  });
-  f.def.forEach((form) => {
-    const b = document.createElement("button");
-    b.innerHTML = `<span>${form.name}</span><span class="tag">防守</span>`;
-    b.title = form.note;
-    b.onclick = () => applyFormation(form, "def");
-    def.appendChild(b);
+  [["off", off, "进攻"], ["def", def, "防守"]].forEach(([side, box, sideLabel]) => {
+    const list = getFormations(state.format, side);
+    list.forEach(form => {
+      const wrap = document.createElement("div");
+      wrap.className = "fitem";
+      const b = document.createElement("button");
+      b.className = "fbtn";
+      b.innerHTML = `<span>${form.name}</span><span class="tag">${sideLabel}</span>`;
+      b.title = (form.note || "") + (form.builtin ? "" : "  · 自定义");
+      b.onclick = () => applyFormation(form, side);
+      const ed = document.createElement("button");
+      ed.className = "fedit";
+      ed.textContent = "✎";
+      ed.title = "重命名 / 管理";
+      ed.onclick = (ev) => { ev.stopPropagation(); openFormManager(form, side); };
+      wrap.appendChild(b); wrap.appendChild(ed);
+      box.appendChild(wrap);
+    });
+    // 新建按钮
+    const add = document.createElement("button");
+    add.className = "fadd";
+    add.textContent = `＋ 新建${sideLabel}阵型`;
+    add.onclick = () => openNewFormDialog(side);
+    box.appendChild(add);
   });
 
   $("#pillFormat").textContent = state.format + " 人制";
@@ -751,16 +1045,37 @@ function drawRoute(g, r, isDraft) {
     "stroke-linejoin": "round", opacity: isDraft ? .72 : .93
   }, g);
 
-  // 箭头（跑动/传球）
-  if (r.type !== "block" && r.pts.length >= 2) {
+  // 终点标记：传球=箭头 ▶ ｜ 跑动=空心圆 ○ ｜ 阻挡=T 字 ─┴─
+  if (r.pts.length >= 2) {
     const a = r.pts[r.pts.length - 2], b = r.pts[r.pts.length - 1];
     const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-    el("path", {
-      d: "M0 0 L-11 -6 L-11 6 Z",
-      fill: color,
-      transform: `translate(${b.x} ${b.y}) rotate(${ang})`,
-      opacity: isDraft ? .72 : .95
-    }, g);
+    const op = isDraft ? .72 : .95;
+
+    if (r.type === "pass") {
+      // 传球：实心箭头
+      el("path", {
+        d: "M0 0 L-13 -7 L-13 7 Z",
+        fill: color,
+        transform: `translate(${b.x} ${b.y}) rotate(${ang})`,
+        opacity: op
+      }, g);
+    } else if (r.type === "run") {
+      // 跑动：空心圆
+      el("circle", {
+        cx: b.x, cy: b.y, r: 7.2,
+        fill: "none", stroke: color,
+        "stroke-width": 3.2, opacity: op
+      }, g);
+    } else if (r.type === "block") {
+      // 阻挡：T 字（垂直于路线方向的横杠）
+      const rad = ang * Math.PI / 180;
+      const nx = -Math.sin(rad) * 10, ny = Math.cos(rad) * 10;
+      el("line", {
+        x1: b.x - nx, y1: b.y - ny, x2: b.x + nx, y2: b.y + ny,
+        stroke: color, "stroke-width": 4.2,
+        "stroke-linecap": "round", opacity: op
+      }, g);
+    }
   }
 
   // 起点标记
@@ -768,21 +1083,57 @@ function drawRoute(g, r, isDraft) {
     cx: r.pts[0].x, cy: r.pts[0].y, r: 3.4,
     fill: color, opacity: .8
   }, g);
-
-  // 传球路线用虚线圆点表示接球点
-  if (r.type === "pass") {
-    const e = r.pts[r.pts.length - 1];
-    el("circle", {
-      cx: e.x, cy: e.y, r: 5.4, fill: "none",
-      stroke: color, "stroke-width": 2
-    }, g);
-  }
 }
 
 // ============================================================
 //  交互：拖动球员 / 画路线
 // ============================================================
 let drag = null;
+
+// ---------- 每个球员的独立撤销历史 ----------
+function pushPlayerHist(p, x, y) {
+  if (!p.history) p.history = [];
+  p.history.push({ x, y });
+  if (p.history.length > 40) p.history.shift();
+  refreshSelPanel();
+}
+function undoPlayer(p) {
+  if (!p || !p.history || !p.history.length) return false;
+  const prev = p.history.pop();
+  p.x = prev.x; p.y = prev.y;
+  render(); updateStats(); refreshSelPanel();
+  return true;
+}
+function undoPlayerAll(p) {
+  if (!p || !p.history || !p.history.length) return 0;
+  const n = p.history.length;
+  const first = p.history[0];
+  p.x = first.x; p.y = first.y;
+  p.history = [];
+  render(); updateStats(); refreshSelPanel();
+  return n;
+}
+
+function refreshSelPanel() {
+  const p = state.players.find(x => x.id === state.selected);
+  const info = $("#selInfo"), bU = $("#btnUndoPlayer"), bA = $("#btnUndoPlayerAll"), bD = $("#btnDelPlayer");
+  if (!p) {
+    info.innerHTML = "未选中任何球员。<br>点球员后可在此单独撤销它。";
+    bU.disabled = bA.disabled = bD.disabled = true;
+    bU.textContent = "⟲ 撤销此球员";
+    return;
+  }
+  const n = p.history ? p.history.length : 0;
+  const sideTxt = p.side === "off" ? "进攻" : "防守";
+  info.innerHTML =
+    `<b>${p.num}</b>（${sideTxt}）<br>` +
+    `位置 <b>${Math.round(p.x)} , ${Math.round(p.y)}</b><br>` +
+    `可撤销步数：<b>${n}</b>`;
+  bU.disabled = n < 1;
+  bA.disabled = n < 2;
+  bD.disabled = false;
+  bU.textContent = n ? `⟲ 撤销此球员（剩 ${n}）` : "⟲ 撤销此球员";
+}
 
 function svgPoint(e) {
   const svg = $("#board");
@@ -791,21 +1142,230 @@ function svgPoint(e) {
   return pt.matrixTransform(svg.getScreenCTM().inverse());
 }
 
+// ---------- 球员操作菜单 ----------
+const PM = $("#playerMenu");
+let pmPlayerId = null;
+
+function showPlayerMenu(p, cx, cy) {
+  pmPlayerId = p.id;
+  const sideTxt = p.side === "off" ? "进攻" : "防守";
+  const histN = p.history ? p.history.length : 0;
+  $("#pmHead").innerHTML =
+    `<b>${p.num}</b> · ${sideTxt} &nbsp;` +
+    `<span style="opacity:.7">(${Math.round(p.x)}, ${Math.round(p.y)})</span>`;
+  // 高亮当前工具；禁用不可用项
+  PM.querySelectorAll(".pm-item").forEach(it => {
+    const act = it.dataset.act;
+    it.classList.toggle("active", (act === state.tool));
+    if (act === "undo") it.style.opacity = histN ? 1 : .38;
+    if (act === "undoAll") it.style.opacity = histN > 1 ? 1 : .38;
+  });
+  PM.classList.add("show");
+  // 定位：跟随指针，且不出屏
+  const w = 178, h = PM.offsetHeight || 250;
+  let x = cx + 12, y = cy - 10;
+  if (x + w > window.innerWidth - 8) x = cx - w - 12;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  if (y < 8) y = 8;
+  PM.style.left = x + "px";
+  PM.style.top = y + "px";
+}
+function hidePlayerMenu() {
+  PM.classList.remove("show");
+  pmPlayerId = null;
+}
+
+PM.addEventListener("click", e => {
+  const it = e.target.closest(".pm-item");
+  if (!it || pmPlayerId === null) return;
+  const p = state.players.find(x => x.id === pmPlayerId);
+  const act = it.dataset.act;
+  hidePlayerMenu();
+  if (!p) return;
+
+  if (act === "move") {
+    setTool("select");
+    state.selected = p.id; render(); refreshSelPanel();
+    toast(`已选中 ${p.num} — 现在可拖动移动，或按 Ctrl+Z 撤销它的移动`);
+  } else if (act === "run" || act === "pass" || act === "block") {
+    // 直接以该球员为起点进入路线绘制
+    state.tool = act;
+    document.querySelectorAll("#toolGroup button").forEach(b =>
+      b.classList.toggle("on", b.dataset.tool === act));
+    const names = { run: "跑动", pass: "传球", block: "阻挡" };
+    $("#pillTool").textContent = "工具：" + names[act] + "路线";
+    state.selected = p.id;
+    state.drawing = {
+      id: state.nextId++, side: p.side,
+      type: act, pts: [{ x: p.x, y: p.y }], player: p.id
+    };
+    render(); refreshSelPanel();
+    $("#status").innerHTML =
+      `<b>${names[act]}路线</b> — 从 <b>${p.num}</b> 开始，沿途<b>点击添加折点</b>，<b>双击</b>完成。`;
+    toast(`开始画${names[act]}路线：点折点 → 双击收尾`);
+  } else if (act === "undo") {
+    if (undoPlayer(p)) toast(`已撤销 ${p.num} 的上一步移动`);
+    else toast("该球员没有可撤销的移动");
+  } else if (act === "undoAll") {
+    const n = undoPlayerAll(p);
+    toast(n ? `已把 ${p.num} 退回初始位置（共 ${n} 步）` : "该球员没有可撤销的移动");
+  } else if (act === "del") {
+    pushUndo();
+    state.players = state.players.filter(x => x.id !== p.id);
+    state.routes = state.routes.filter(r => r.player !== p.id);
+    state.selected = null;
+    render(); updateStats(); refreshSelPanel();
+    toast(`已删除球员 ${p.num}`);
+  }
+});
+
+// 点菜单外 / Esc 关闭
+document.addEventListener("pointerdown", e => {
+  if (!e.target.closest("#playerMenu")) hidePlayerMenu();
+}, true);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") hidePlayerMenu();
+});
+
+// ============================================================
+//  阵型新建 / 重命名 / 管理 弹窗
+// ============================================================
+const FM = $("#formModal"), RM = $("#renameModal");
+let fmSide = "off", fmPicked = null, rmTarget = null;
+
+function openNewFormDialog(side) {
+  fmSide = side;
+  fmPicked = null;
+  const sideLabel = side === "off" ? "进攻" : "防守";
+  $("#fmTitle").textContent = `新建${sideLabel}阵型`;
+  $("#fmSub").textContent = `当前 ${state.format} 人制。选模板作为起点，或选「空白模板」从零开始。`;
+  $("#fmName").value = "";
+  $("#fmTplLabel").textContent = `选择模板（${state.format} 人制）`;
+  renderTemplateList();
+  FM.classList.add("show");
+  setTimeout(() => $("#fmName").focus(), 40);
+}
+
+function renderTemplateList() {
+  const box = $("#fmTemplates");
+  box.innerHTML = "";
+  const presets = (PRESETS[state.format] && PRESETS[state.format][fmSide]) || [];
+
+  // 空白模板
+  const blank = document.createElement("div");
+  blank.className = "tpl-item on";
+  blank.innerHTML =
+    `<input type="radio" name="tpl" checked>` +
+    `<div><div class="tname">空白模板</div>` +
+    `<div class="tnote">生成 ${parseInt(state.format,10)} 个占位球员，创建后直接拖动布阵。</div></div>` +
+    `<span class="tbadge blank">空白</span>`;
+  blank.onclick = () => pickTpl(box, blank, null);
+  box.appendChild(blank);
+
+  presets.forEach(p => {
+    const it = document.createElement("div");
+    it.className = "tpl-item";
+    it.innerHTML =
+      `<input type="radio" name="tpl">` +
+      `<div><div class="tname">${p.name}</div><div class="tnote">${p.note || ""}</div></div>` +
+      `<span class="tbadge">系统预置</span>`;
+    it.onclick = () => pickTpl(box, it, p);
+    box.appendChild(it);
+  });
+
+  // 已有自定义阵型也可作模板
+  const customs = (state.custom[state.format] && state.custom[state.format][fmSide]) || [];
+  customs.forEach(c => {
+    const it = document.createElement("div");
+    it.className = "tpl-item";
+    it.innerHTML =
+      `<input type="radio" name="tpl">` +
+      `<div><div class="tname">${state.renames[c.key] || c.name}</div>` +
+      `<div class="tnote">${c.note || "复制自定义阵型"}</div></div>` +
+      `<span class="tbadge">我的阵型</span>`;
+    it.onclick = () => pickTpl(box, it, c);
+    box.appendChild(it);
+  });
+
+  fmPicked = null;
+}
+
+function pickTpl(box, node, tpl) {
+  box.querySelectorAll(".tpl-item").forEach(x => {
+    x.classList.remove("on");
+    const r = x.querySelector("input[type=radio]"); if (r) r.checked = false;
+  });
+  node.classList.add("on");
+  const r = node.querySelector("input[type=radio]"); if (r) r.checked = true;
+  fmPicked = tpl;
+}
+
+function openFormManager(form, side) {
+  rmTarget = form;
+  $("#rnSub").innerHTML =
+    `<b>${form.name}</b>　${side === "off" ? "进攻" : "防守"} · ${state.format} 人制` +
+    (form.builtin ? "　<span style='color:#8fb3cc'>系统内置</span>" : "　<span style='color:#e0b070'>我的阵型</span>") +
+    `<br>仅修改列表中显示的名称，球员站位不变。`;
+  $("#rnName").value = form.name;
+  RM.classList.add("show");
+  setTimeout(() => { $("#rnName").focus(); $("#rnName").select(); }, 40);
+}
+
+$("#fmCancel").onclick = () => FM.classList.remove("show");
+$("#fmOk").onclick = () => {
+  const name = $("#fmName").value.trim();
+  if (!name) { toast("请填写阵型名称"); $("#fmName").focus(); return; }
+  const form = newFormation(state.format, fmSide, name, fmPicked);
+  FM.classList.remove("show");
+  renderFormationButtons();
+  // 创建后自动加载到场上
+  applyFormation(form, fmSide);
+  toast(`已创建${fmSide === "off" ? "进攻" : "防守"}阵型「${name}」并加载到场上`);
+};
+
+$("#rnCancel").onclick = () => RM.classList.remove("show");
+$("#rnOk").onclick = () => {
+  const v = $("#rnName").value.trim();
+  if (!v) { toast("名称不能为空"); return; }
+  if (!rmTarget) return;
+  renameFormation(rmTarget.key, v);
+  RM.classList.remove("show");
+  renderFormationButtons();
+  toast(`已重命名为「${v}」`);
+};
+$("#rnName").addEventListener("keydown", e => {
+  if (e.key === "Enter") $("#rnOk").click();
+  if (e.key === "Escape") RM.classList.remove("show");
+});
+$("#fmName").addEventListener("keydown", e => {
+  if (e.key === "Enter") $("#fmOk").click();
+  if (e.key === "Escape") FM.classList.remove("show");
+});
+// 点遮罩关闭
+[FM, RM].forEach(m => m.addEventListener("pointerdown", e => {
+  if (e.target === m) m.classList.remove("show");
+}));
+
 function startDrag(e, p) {
   e.stopPropagation();
   if (state.tool === "erase") {
     pushUndo();
     state.players = state.players.filter(x => x.id !== p.id);
     state.routes = state.routes.filter(r => r.player !== p.id);
-    render(); updateStats(); toast("已删除球员");
+    render(); updateStats(); refreshSelPanel();
+    toast("已删除球员");
     return;
   }
   if (state.tool === "select") {
     state.selected = p.id;
     const start = svgPoint(e);
-    drag = { id: p.id, ox: start.x - p.x, oy: start.y - p.y, moved: false };
+    drag = {
+      id: p.id, ox: start.x - p.x, oy: start.y - p.y, moved: false,
+      startX: p.x, startY: p.y,
+      clientX: e.clientX, clientY: e.clientY
+    };
     $("#board").setPointerCapture(e.pointerId);
-    render();
+    render(); refreshSelPanel();
     return;
   }
   // 画路线工具
@@ -828,7 +1388,7 @@ $("#board").addEventListener("pointerdown", e => {
   }
   if (state.tool === "select") {
     state.selected = null;
-    render();
+    render(); refreshSelPanel();
   }
 });
 
@@ -860,9 +1420,21 @@ $("#board").addEventListener("pointermove", e => {
 
 $("#board").addEventListener("pointerup", e => {
   if (drag) {
-    if (drag.moved) pushUndo();
+    if (drag.moved) {
+      const p = state.players.find(x => x.id === drag.id);
+      if (p) {
+        // 记入该球员自己的历史栈（可单独撤销），同时保留全局撤销
+        pushPlayerHist(p, drag.startX, drag.startY);
+        pushUndo();
+      }
+      hidePlayerMenu();
+    } else {
+      // 没移动 = 单击 → 弹出操作菜单
+      const p = state.players.find(x => x.id === drag.id);
+      if (p) showPlayerMenu(p, drag.clientX, drag.clientY);
+    }
     drag = null;
-    updateStats();
+    updateStats(); refreshSelPanel();
     return;
   }
 });
@@ -954,6 +1526,31 @@ $("#btnReset").onclick = () => {
   state.players = []; state.routes = []; state.selected = null; state.drawing = null;
   render(); updateStats();
   toast("已重置");
+};
+
+// ---------- 选中对象：单独撤销 / 删除 ----------
+$("#btnUndoPlayer").onclick = () => {
+  const p = state.players.find(x => x.id === state.selected);
+  if (!p) return toast("请先选中一个球员");
+  if (!undoPlayer(p)) return toast("该球员没有可撤销的移动");
+  toast(`已撤销 ${p.num} 的上一步移动`);
+};
+$("#btnUndoPlayerAll").onclick = () => {
+  const p = state.players.find(x => x.id === state.selected);
+  if (!p) return toast("请先选中一个球员");
+  const n = undoPlayerAll(p);
+  if (!n) return toast("该球员没有可撤销的移动");
+  toast(`已把 ${p.num} 退回初始位置（共 ${n} 步）`);
+};
+$("#btnDelPlayer").onclick = () => {
+  const p = state.players.find(x => x.id === state.selected);
+  if (!p) return toast("请先选中一个球员");
+  pushUndo();
+  state.players = state.players.filter(x => x.id !== p.id);
+  state.routes = state.routes.filter(r => r.player !== p.id);
+  state.selected = null;
+  render(); updateStats(); refreshSelPanel();
+  toast(`已删除球员 ${p.num}`);
 };
 
 $("#btnMirror").onclick = () => {
@@ -1100,7 +1697,18 @@ function updateStats() {
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && k === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === "z" && !e.shiftKey) {
+    e.preventDefault();
+    // 选中球员时，Ctrl+Z 只撤销该球员自己的移动
+    const sp = state.players.find(x => x.id === state.selected);
+    if (sp && sp.history && sp.history.length) {
+      undoPlayer(sp);
+      toast(`已撤销 ${sp.num} 的上一步移动`);
+    } else {
+      undo();
+    }
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
   if (k === "v") setTool("select");
   else if (k === "r") setTool("run");
@@ -1120,6 +1728,7 @@ $("#playCode").addEventListener("input", updateStats);
 //  启动
 // ============================================================
 function boot() {
+  loadFormStore();
   drawField();
   renderFormationButtons();
   // 默认加载一个进攻阵型
@@ -1128,6 +1737,7 @@ function boot() {
   setTool("select");
   updateButtons();
   updateStats();
+  refreshSelPanel();
   $("#status").innerHTML =
     "就绪 — <b>拖动</b>球员调整站位；选 <b>R/P/B</b> 画路线（点球员→点折点→双击收尾）";
 }
