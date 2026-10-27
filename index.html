@@ -264,8 +264,8 @@ footer{
   <button id="btnClear">清空路线</button>
   <button id="btnReset" class="warn">重置战术</button>
   <div class="sep"></div>
-  <button id="btnSVG">导出 SVG</button>
-  <button id="btnPNG">导出 PNG</button>
+  <button id="btnPDF">📄 导出 PDF</button>
+  <button id="btnPNG">🖼️ 导出图片</button>
 </header>
 
 <main>
@@ -362,6 +362,18 @@ footer{
         <button id="btnDelPlayer" class="warn" disabled>✕ 删除此球员</button>
       </div>
 
+      <div class="aside-h">战术本</div>
+      <div class="field-note" id="playbookInfo" style="margin-bottom:8px">
+        还没有存入战术。<br>画好后点「存入战术本」。
+      </div>
+      <div class="row">
+        <button id="btnAddPlay">＋ 存入战术本</button>
+      </div>
+      <div class="formation-list" id="playList"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnPrintBook">🖨️ 打印战术本（A4）</button>
+      </div>
+
       <div class="aside-h">画布</div>
       <div class="row">
         <button id="btnMirror">⇄ 左右镜像</button>
@@ -433,6 +445,19 @@ footer{
     <div class="modal-actions">
       <button id="rnCancel">取消</button>
       <button id="rnOk" class="primary">保存名称</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="printModal">
+  <div class="modal-card">
+    <div class="modal-title">打印战术本（A4 横版）</div>
+    <div class="modal-sub" id="prSub">选择每页排版的战术数量，自动生成多页 PDF。</div>
+    <label>选择排版布局</label>
+    <div class="tpl-list" id="prLayouts"></div>
+    <div class="modal-actions">
+      <button id="prCancel">取消</button>
+      <button id="prOk" class="primary">生成 PDF</button>
     </div>
   </div>
 </div>
@@ -930,6 +955,276 @@ function deleteFormation(key) {
   if (state.renames[key]) { delete state.renames[key]; saveFormStore(); return true; }
   return false;
 }
+
+// ============================================================
+//  战术本：多战术保存 + A4 网格打印（2×2 / 3×3 / 4×4 / 5×5）
+// ============================================================
+const PLAY_STORE_KEY = "obs-plays-v1";
+state.plays = [];
+
+function loadPlays() {
+  try {
+    const raw = localStorage.getItem(PLAY_STORE_KEY);
+    if (raw) state.plays = JSON.parse(raw) || [];
+  } catch (err) { state.plays = []; }
+}
+function savePlays() {
+  try { localStorage.setItem(PLAY_STORE_KEY, JSON.stringify(state.plays)); }
+  catch (err) { console.warn("保存战术本失败", err); }
+}
+
+function renderPlayList() {
+  const box = $("#playList");
+  const info = $("#playbookInfo");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!state.plays.length) {
+    if (info) info.innerHTML = "还没有存入战术。<br>画好后点「存入战术本」。";
+  } else {
+    if (info) info.innerHTML = `已存 <b>${state.plays.length}</b> 个战术，可打印排版。`;
+    state.plays.forEach((p, idx) => {
+      const wrap = document.createElement("div");
+      wrap.className = "fitem";
+      const b = document.createElement("button");
+      b.className = "fbtn";
+      b.innerHTML = `<span>${idx + 1}. ${p.name}</span><span class="tag">${p.format}人</span>`;
+      b.title = p.code || p.name;
+      b.onclick = () => loadPlayIntoBoard(p);
+      const del = document.createElement("button");
+      del.className = "fedit";
+      del.textContent = "✕";
+      del.title = "移出战术本";
+      del.onclick = (ev) => {
+        ev.stopPropagation();
+        state.plays = state.plays.filter(x => x.id !== p.id);
+        savePlays(); renderPlayList();
+        toast(`已移出「${p.name}」`);
+      };
+      wrap.appendChild(b); wrap.appendChild(del);
+      box.appendChild(wrap);
+    });
+  }
+  const pb = $("#btnPrintBook");
+  if (pb) pb.disabled = state.plays.length === 0;
+}
+
+// 把存下的战术载入画布
+function loadPlayIntoBoard(p) {
+  pushUndo();
+  state.players = (p.players || []).map(x => ({ ...x, history: [] }));
+  state.routes = (p.routes || []).map(x => ({ ...x }));
+  state.format = p.format || 11;
+  $("#selFormat").value = String(state.format);
+  $("#playName").value = p.name || "";
+  $("#playCode").value = p.code || "";
+  $("#playNote").value = p.note || "";
+  state.selected = null; state.drawing = null;
+  renderFormationButtons();
+  render(); updateStats(); refreshSelPanel();
+  toast(`已载入战术「${p.name}」`);
+}
+
+// 把当前画布存入战术本（含快照图用于打印）
+function addCurrentPlay() {
+  renderPlayCanvas(c => {
+    const p = {
+      id: "p-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1000),
+      name: $("#playName").value || ("战术 " + (state.plays.length + 1)),
+      code: $("#playCode").value || "",
+      note: $("#playNote").value || "",
+      format: state.format,
+      players: state.players.map(x => ({ ...x, history: [] })),
+      routes: state.routes.map(x => ({ ...x })),
+      image: c.toDataURL("image/jpeg", 0.82),
+      createdAt: new Date().toISOString()
+    };
+    state.plays.push(p);
+    savePlays(); renderPlayList();
+    toast(`已存入战术本「${p.name}」（共 ${state.plays.length} 个）`);
+  });
+}
+
+// ---------- A4 网格排版 ----------
+const A4 = { w: 842, h: 595 };   // A4 横版 pt
+const PRINT_LAYOUTS = [
+  { cols: 1, rows: 1, label: "1 × 1", note: "整页单战术，最大清晰度" },
+  { cols: 2, rows: 2, label: "2 × 2", note: "每页 4 个战术" },
+  { cols: 3, rows: 3, label: "3 × 3", note: "每页 9 个战术（经典战术本）" },
+  { cols: 4, rows: 4, label: "4 × 4", note: "每页 16 个战术" },
+  { cols: 5, rows: 5, label: "5 × 5", note: "每页 25 个战术（腕带卡密度）" }
+];
+
+// 把一批战术按 cols×rows 画到一张 A4 比例 canvas
+function buildGridCanvas(plays, cols, rows) {
+  const W = A4.w * 2, H = A4.h * 2;   // 2x 分辨率
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+
+  const M = 22 * 2;                    // 边距
+  const gap = 8 * 2;                   // 格间距
+  const cw = (W - M * 2 - gap * (cols - 1)) / cols;
+  const ch = (H - M * 2 - gap * (rows - 1)) / rows;
+
+  plays.forEach((p, i) => {
+    const r = Math.floor(i / cols), cc = i % cols;
+    const x = M + cc * (cw + gap), y = M + r * (ch + gap);
+
+    // 格子底框
+    ctx.fillStyle = "#f4f6f8";
+    ctx.fillRect(x, y, cw, ch);
+    ctx.strokeStyle = "#c9d2da";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + .75, y + .75, cw - 1.5, ch - 1.5);
+
+    // 战术图（保持比例，居中）
+    const padTop = 22, padSide = 6;
+    const iw = cw - padSide * 2, ih = ch - padTop - padSide;
+    const img = p._img;   // 已加载的 Image 对象
+    if (img && img.width) {
+      const s = Math.min(iw / img.width, ih / img.height);
+      const dw = img.width * s, dh = img.height * s;
+      ctx.drawImage(img, x + padSide + (iw - dw) / 2, y + padTop + (ih - dh) / 2, dw, dh);
+    }
+
+    // 标题条
+    ctx.fillStyle = "#1a222c";
+    ctx.fillRect(x, y, cw, padTop);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 13px sans-serif";
+    ctx.textBaseline = "middle";
+    const title = (i + 1) + ". " + (p.name || "未命名");
+    ctx.fillText(title, x + 8, y + padTop / 2, cw - 16);
+    if (p.code) {
+      ctx.fillStyle = "#9fb0c0";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(p.code, x + cw - 8, y + padTop / 2, cw * 0.35);
+      ctx.textAlign = "left";
+    }
+  });
+  return c;
+}
+
+// 多页 PDF：每页一张 JPEG。对象号连续：1=Catalog 2=Pages，每页 Page+Image+Contents
+function buildMultiPagePDF(pageImages) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const pushS = s => chunks.push(enc.encode(s));
+  const pushB = b => chunks.push(b);
+  const len = () => chunks.reduce((n, c) => n + c.length, 0);
+  const offsets = [];   // offsets[i] = 对象 (i+1) 的起始字节
+  const n = pageImages.length;
+  const totalObjs = 2 + n * 3;
+
+  pushS("%PDF-1.4\n");
+  const mark = () => offsets.push(len());
+
+  mark(); pushS("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  const kids = Array.from({ length: n }, (_, k) => `${3 + k * 3} 0 R`).join(" ");
+  mark(); pushS(`2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${n} >>\nendobj\n`);
+
+  for (let k = 0; k < n; k++) {
+    const pageObj = 3 + k * 3, imgObj = 4 + k * 3, contObj = 5 + k * 3;
+    const pg = pageImages[k];
+    const scale = Math.min(A4.w / pg.w, A4.h / pg.h);
+    const dw = pg.w * scale, dh = pg.h * scale;
+    const ox = (A4.w - dw) / 2, oy = (A4.h - dh) / 2;
+
+    mark();
+    pushS(`${pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A4.w} ${A4.h}] ` +
+      `/Resources << /XObject << /Im${k} ${imgObj} 0 R >> >> /Contents ${contObj} 0 R >>\nendobj\n`);
+
+    mark();
+    pushS(`${imgObj} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${pg.w} /Height ${pg.h} ` +
+      `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${pg.bytes.length} >>\nstream\n`);
+    pushB(pg.bytes);
+    pushS("\nendstream\nendobj\n");
+
+    mark();
+    const content = `q\n${dw.toFixed(2)} 0 0 ${dh.toFixed(2)} ${ox.toFixed(2)} ${oy.toFixed(2)} cm\n/Im${k} Do\nQ\n`;
+    pushS(`${contObj} 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`);
+  }
+
+  const xrefPos = len();
+  pushS(`xref\n0 ${totalObjs + 1}\n0000000000 65535 f \n`);
+  for (const o of offsets) pushS(String(o).padStart(10, "0") + " 00000 n \n");
+  pushS(`trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
+
+  const total = len();
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
+  return out;
+}
+
+// ---------- 打印弹窗 ----------
+let prPicked = PRINT_LAYOUTS[2];  // 默认 3×3
+
+function openPrintDialog() {
+  if (!state.plays.length) return toast("战术本是空的，先存入战术");
+  const box = $("#prLayouts");
+  box.innerHTML = "";
+  PRINT_LAYOUTS.forEach((L, idx) => {
+    const it = document.createElement("div");
+    it.className = "tpl-item" + (L === prPicked ? " on" : "");
+    it.innerHTML =
+      `<input type="radio" name="prl" ${L === prPicked ? "checked" : ""}>` +
+      `<div class="tmain"><div class="tname">${L.label}</div><div class="tnote">${L.note}</div></div>` +
+      `<span class="tbadge">${Math.ceil(state.plays.length / (L.cols * L.rows))} 页</span>`;
+    it.onclick = () => {
+      box.querySelectorAll(".tpl-item").forEach(x => x.classList.remove("on"));
+      it.classList.add("on");
+      const r = it.querySelector("input"); if (r) r.checked = true;
+      prPicked = L;
+    };
+    box.appendChild(it);
+  });
+  const pages = Math.ceil(state.plays.length / (prPicked.cols * prPicked.rows));
+  $("#prSub").innerHTML = `共 <b>${state.plays.length}</b> 个战术 · 当前布局约 <b>${pages}</b> 页 A4`;
+  $("#printModal").classList.add("show");
+}
+
+function doPrintBook() {
+  const L = prPicked;
+  $("#printModal").classList.remove("show");
+  toast("正在生成 PDF…");
+  // 预加载所有快照图
+  let loaded = 0;
+  const items = state.plays.map(p => ({ ...p, _img: null }));
+  items.forEach(it => {
+    const img = new Image();
+    img.onload = img.onerror = () => {
+      it._img = img;
+      if (++loaded < items.length) return;
+      // 全部加载完，按网格分页
+      const per = L.cols * L.rows;
+      const pages = [];
+      for (let i = 0; i < items.length; i += per) {
+        const chunk = items.slice(i, i + per);
+        const cv = buildGridCanvas(chunk, L.cols, L.rows);
+        const dataUrl = cv.toDataURL("image/jpeg", 0.9);
+        pages.push({ bytes: b64ToBytes(dataUrl.split(",")[1]), w: cv.width, h: cv.height });
+      }
+      const pdf = buildMultiPagePDF(pages);
+      const fname = ($("#playName").value || "playbook").replace(/[\\/:*?"<>|]/g, "_") + `_${L.label.replace(/\s/g, "")}.pdf`;
+      downloadBytes(pdf, "application/pdf", fname);
+      toast(`战术本 PDF 已生成（${L.label}，共 ${pages.length} 页）`);
+    };
+    img.src = it.image;
+  });
+}
+
+// ---------- 战术本 ----------
+$("#btnAddPlay").onclick = addCurrentPlay;
+$("#btnPrintBook").onclick = openPrintDialog;
+$("#prCancel").onclick = () => $("#printModal").classList.remove("show");
+$("#prOk").onclick = doPrintBook;
+$("#printModal").addEventListener("pointerdown", e => {
+  if (e.target === $("#printModal")) $("#printModal").classList.remove("show");
+});
 
 function renderFormationButtons() {
   const off = $("#offFormations"), def = $("#defFormations");
@@ -1783,18 +2078,57 @@ function buildExportSVG() {
   return new XMLSerializer().serializeToString(svg);
 }
 
-$("#btnSVG").onclick = () => {
-  const src = buildExportSVG();
-  const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = ($("#playName").value || "playbook").replace(/[\\/:*?"<>|]/g, "_") + ".svg";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-  toast("SVG 已导出");
-};
+// ---------- 导出：PDF / 图片（对齐 Playmaker X 官方导出格式） ----------
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
-$("#btnPNG").onclick = () => {
+// 最小 PDF 生成器：把 JPEG 整图嵌入一页 A4 横版，零依赖
+function buildImagePDF(jpegBytes, imgW, imgH, pageW, pageH) {
+  pageW = pageW || 842; pageH = pageH || 595;   // A4 横版 pt
+  const scale = Math.min(pageW / imgW, pageH / imgH);
+  const dw = imgW * scale, dh = imgH * scale;
+  const ox = (pageW - dw) / 2, oy = (pageH - dh) / 2;
+
+  const enc = new TextEncoder();
+  const chunks = [];
+  const pushS = s => chunks.push(enc.encode(s));
+  const pushB = b => chunks.push(b);
+  const len = () => chunks.reduce((n, c) => n + c.length, 0);
+
+  pushS("%PDF-1.4\n");
+  const off = [];
+  const mark = () => off.push(len());
+
+  mark(); pushS("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  mark(); pushS("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+  mark(); pushS(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] ` +
+    `/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`);
+  mark();
+  pushS(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} ` +
+    `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+  pushB(jpegBytes);
+  pushS("\nendstream\nendobj\n");
+  mark();
+  const content = `q\n${dw.toFixed(2)} 0 0 ${dh.toFixed(2)} ${ox.toFixed(2)} ${oy.toFixed(2)} cm\n/Im0 Do\nQ\n`;
+  pushS(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`);
+
+  const xrefPos = len();
+  pushS("xref\n0 6\n0000000000 65535 f \n");
+  for (const o of off) pushS(String(o).padStart(10, "0") + " 00000 n \n");
+  pushS(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
+
+  const total = len();
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
+  return out;
+}
+
+function renderPlayCanvas(cb, quality) {
   const src = buildExportSVG();
   const img = new Image();
   const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
@@ -1806,18 +2140,44 @@ $("#btnPNG").onclick = () => {
     ctx.fillStyle = "#0f1419";
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0, c.width, c.height);
-    c.toBlob(b => {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(b);
-      a.download = ($("#playName").value || "playbook").replace(/[\\/:*?"<>|]/g, "_") + ".png";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-      toast("PNG 已导出（2000×1120）");
-    });
     URL.revokeObjectURL(url);
+    cb(c);
   };
-  img.onerror = () => { toast("PNG 导出失败，请改用 SVG"); URL.revokeObjectURL(url); };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("图形渲染失败"); };
   img.src = url;
+}
+
+function downloadBytes(bytes, mime, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+function playFileName(ext) {
+  return ($("#playName").value || "playbook").replace(/[\\/:*?"<>|]/g, "_") + ext;
+}
+
+// 导出 PDF（A4 横版，战术图居中）
+$("#btnPDF").onclick = () => {
+  renderPlayCanvas(c => {
+    const dataUrl = c.toDataURL("image/jpeg", 0.93);
+    const jpeg = b64ToBytes(dataUrl.split(",")[1]);
+    const pdf = buildImagePDF(jpeg, c.width, c.height);
+    downloadBytes(pdf, "application/pdf", playFileName(".pdf"));
+    toast("PDF 已导出（A4 横版）");
+  });
+};
+
+// 导出图片（高清 PNG）
+$("#btnPNG").onclick = () => {
+  renderPlayCanvas(c => {
+    c.toBlob(b => {
+      downloadBytes(b, "image/png", playFileName(".png"));
+      toast("图片已导出（PNG 2000×1120）");
+    }, "image/png");
+  });
 };
 
 // ---------- 保存 / 载入 ----------
@@ -1919,6 +2279,7 @@ $("#playCode").addEventListener("input", updateStats);
 // ============================================================
 function boot() {
   loadFormStore();
+  loadPlays();
   drawField();
   renderFormationButtons();
   // 默认加载一个进攻阵型
@@ -1928,6 +2289,7 @@ function boot() {
   updateButtons();
   updateStats();
   refreshSelPanel();
+  renderPlayList();
   $("#status").innerHTML =
     "就绪 — <b>拖动</b>球员调整站位；选 <b>R/P/B</b> 画路线（点球员→点折点→双击收尾）";
 }
