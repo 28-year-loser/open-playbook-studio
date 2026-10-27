@@ -320,6 +320,52 @@ footer{
 .route-handle{cursor:grab}
 .route-handle:hover{cursor:grabbing}
 
+/* ===== 隐藏式滚动条：去掉白色轨道，极细半透明滑块与深色背景融合 ===== */
+aside, #playerMenu, #playerMenu .pm-sub, #routeMenu, .tpl-list, .modal-card{
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.13) transparent;
+}
+aside::-webkit-scrollbar,
+#playerMenu::-webkit-scrollbar,
+#playerMenu .pm-sub::-webkit-scrollbar,
+#routeMenu::-webkit-scrollbar,
+.tpl-list::-webkit-scrollbar,
+.modal-card::-webkit-scrollbar{
+  width:4px; height:4px;
+}
+aside::-webkit-scrollbar-track,
+#playerMenu::-webkit-scrollbar-track,
+#playerMenu .pm-sub::-webkit-scrollbar-track,
+#routeMenu::-webkit-scrollbar-track,
+.tpl-list::-webkit-scrollbar-track,
+.modal-card::-webkit-scrollbar-track{
+  background:transparent;
+}
+aside::-webkit-scrollbar-thumb,
+#playerMenu::-webkit-scrollbar-thumb,
+#playerMenu .pm-sub::-webkit-scrollbar-thumb,
+#routeMenu::-webkit-scrollbar-thumb,
+.tpl-list::-webkit-scrollbar-thumb,
+.modal-card::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.13);
+  border-radius:4px;
+}
+aside::-webkit-scrollbar-thumb:hover,
+#playerMenu::-webkit-scrollbar-thumb:hover,
+#playerMenu .pm-sub::-webkit-scrollbar-thumb:hover,
+#routeMenu::-webkit-scrollbar-thumb:hover,
+.tpl-list::-webkit-scrollbar-thumb:hover,
+.modal-card::-webkit-scrollbar-thumb:hover{
+  background:rgba(255,255,255,.22);
+}
+/* 角落交叉处不留白块 */
+aside::-webkit-scrollbar-corner,
+#playerMenu::-webkit-scrollbar-corner,
+#playerMenu .pm-sub::-webkit-scrollbar-corner,
+#routeMenu::-webkit-scrollbar-corner{
+  background:transparent;
+}
+
 #toast{
   position:fixed;left:50%;bottom:70px;transform:translateX(-50%) translateY(12px);
   background:#20303e;color:var(--fg);padding:10px 17px;border-radius:9px;
