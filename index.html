@@ -1807,7 +1807,13 @@ function pushPlayerHist(p, x, y) {
 function undoPlayer(p) {
   if (!p || !p.history || !p.history.length) return false;
   const prev = p.history.pop();
+  const dx = prev.x - p.x, dy = prev.y - p.y;
   p.x = prev.x; p.y = prev.y;
+  // 路线跟随回退
+  state.routes.forEach(r => {
+    if (r.player === p.id && r.pts && r.pts.length)
+      r.pts = r.pts.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+  });
   render(); updateStats(); refreshSelPanel();
   return true;
 }
@@ -1815,8 +1821,13 @@ function undoPlayerAll(p) {
   if (!p || !p.history || !p.history.length) return 0;
   const n = p.history.length;
   const first = p.history[0];
+  const dx = first.x - p.x, dy = first.y - p.y;
   p.x = first.x; p.y = first.y;
   p.history = [];
+  state.routes.forEach(r => {
+    if (r.player === p.id && r.pts && r.pts.length)
+      r.pts = r.pts.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+  });
   render(); updateStats(); refreshSelPanel();
   return n;
 }
@@ -2150,10 +2161,15 @@ function startDrag(e, p) {
   if (state.tool === "select") {
     state.selected = p.id;
     const start = svgPoint(e);
+    // 记录该球员所有路线相对球员的偏移，拖动时整体跟随
+    const routeOffset = state.routes
+      .filter(r => r.player === p.id && r.pts && r.pts.length)
+      .map(r => ({ id: r.id, pts: r.pts.map(pt => ({ x: pt.x - p.x, y: pt.y - p.y })) }));
     drag = {
       id: p.id, ox: start.x - p.x, oy: start.y - p.y, moved: false,
       startX: p.x, startY: p.y,
-      clientX: e.clientX, clientY: e.clientY
+      clientX: e.clientX, clientY: e.clientY,
+      routeOffset
     };
     $("#board").setPointerCapture(e.pointerId);
     render(); refreshSelPanel();
@@ -2190,6 +2206,13 @@ $("#board").addEventListener("pointermove", e => {
     const pt = svgPoint(e);
     p.x = Math.max(FIELD.x - EZ_W + 12, Math.min(FIELD.x + FIELD.w + EZ_W - 12, pt.x - drag.ox));
     p.y = Math.max(FIELD.y + 12, Math.min(FIELD.y + FIELD.h - 12, pt.y - drag.oy));
+    // 路线跟随球员（保持相对形状）
+    if (drag.routeOffset) {
+      drag.routeOffset.forEach(ro => {
+        const r = state.routes.find(x => x.id === ro.id);
+        if (r) r.pts = ro.pts.map(off => ({ x: p.x + off.x, y: p.y + off.y }));
+      });
+    }
     drag.moved = true;
     render();
     return;
