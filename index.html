@@ -44,10 +44,11 @@ header{
 }
 .brand{display:flex;align-items:center;gap:9px;margin-right:6px}
 .brand .logo{
-  width:28px;height:28px;border-radius:8px;flex-shrink:0;
-  background:linear-gradient(135deg,#4da3ff,#7a5cff);
-  display:grid;place-items:center;font-size:15px;font-weight:800;color:#fff;
+  width:32px;height:32px;border-radius:9px;flex-shrink:0;overflow:hidden;
+  background:#1a2a4a;border:1px solid #3d5163;
+  display:grid;place-items:center;
 }
+.brand .logo img{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px}
 .brand b{font-size:14px;letter-spacing:.01em}
 .brand small{display:block;font-size:10px;color:var(--fg2);font-weight:400}
 .spacer{flex:1}
@@ -144,6 +145,16 @@ footer{
 }
 #playerMenu .pm-sep{height:1px;background:#2e3a46;margin:3px 0}
 #playerMenu .pm-item.active{background:#2b4256;border-left-color:var(--accent2)}
+#playerMenu .pm-sub{display:none;background:#162029;border-top:1px solid #2e3a46}
+#playerMenu .pm-sub.open{display:block}
+#playerMenu .pm-tree{
+  display:flex; align-items:center; gap:7px;
+  padding:6px 13px 6px 20px; font-size:11.5px; cursor:pointer;
+  color:#cfe0ee; border-left:3px solid transparent;
+}
+#playerMenu .pm-tree:hover{background:#243442;border-left-color:var(--accent2)}
+#playerMenu .pm-tree .tn{color:#7d94a8;font-size:9.5px;margin-left:auto;
+  background:#101820;padding:1px 5px;border-radius:3px}
 
 /* ===== 阵型管理：新建 / 重命名 弹窗 ===== */
 .fitem{
@@ -182,7 +193,7 @@ footer{
   width:100%; padding:9px 11px; font-size:13px;
   background:#121a22; border:1px solid #334655; border-radius:8px; color:var(--fg);
 }
-.tpl-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding-right:3px}
+.tpl-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;padding-right:4px}
 .tpl-item{
   display:flex; gap:9px; align-items:flex-start;
   padding:9px 11px; border:1px solid #2e3f4e; border-radius:8px;
@@ -198,6 +209,14 @@ footer{
   border-radius:5px; background:#20303c; color:#8fb3cc;
 }
 .tpl-item .tbadge.blank{background:#3a2c1c;color:#e0b070}
+.tpl-item .tmain{flex:1;min-width:0}
+.tpl-preview{
+  display:block; width:100%; max-width:178px; height:auto;
+  margin-top:7px; border-radius:5px; border:1px solid #2a3c4c;
+  background:#16301f;
+}
+.tpl-preview .pv-yard{stroke:rgba(255,255,255,.16);stroke-width:.8}
+.tpl-preview .pv-dot{stroke:rgba(255,255,255,.35);stroke-width:.5}
 .modal-actions{display:flex;gap:9px;margin-top:19px}
 .modal-actions button{flex:1;padding:10px;font-size:13px;border-radius:8px}
 .modal-actions .primary{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:700}
@@ -228,19 +247,9 @@ footer{
 
 <header>
   <div class="brand">
-    <div class="logo">🏈</div>
-    <div><b>Open Playbook Studio</b><small>开源美式橄榄球战术板 · Playmaker X 替代</small></div>
+    <div class="logo" id="brandLogo"><img src="data:image/png;base64,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" alt="南京应天"></div>
+    <div><b id="brandTitle">南京应天美式橄榄球队</b><small id="brandSub">战术工作台 · Playbook Studio</small></div>
   </div>
-
-  <div class="tool-group" id="toolGroup">
-    <button data-tool="select" class="on" title="选择 / 移动 (V)">选择</button>
-    <button data-tool="run" title="跑动路线 (R)">跑动</button>
-    <button data-tool="pass" title="传球路线 (P)">传球</button>
-    <button data-tool="block" title="阻挡 (B)">阻挡</button>
-    <button data-tool="erase" title="删除 (X)">删除</button>
-  </div>
-
-  <div class="sep"></div>
 
   <div class="tool-group" id="sideGroup">
     <button data-side="off" class="on">进攻</button>
@@ -280,10 +289,28 @@ footer{
       <div class="formation-list" id="defFormations"></div>
 
       <div class="aside-h">路线终点标记</div>
-      <div class="field-note" style="margin-bottom:12px">
-        <b>传球</b> → 实心箭头 ▶<br>
-        <b>跑动</b> → 空心圆 ○<br>
-        <b>阻挡</b> → T 字 ─┴─
+      <div class="field-note" style="margin-bottom:12px;padding:10px 8px">
+        <svg id="routeLegend" viewBox="0 0 186 128" width="100%" style="display:block">
+          <!-- 传球：实线弧 + 实心箭头 -->
+          <text x="2" y="12" fill="#9fb0c0" font-size="10.5">传球</text>
+          <path d="M2 32 C 50 32, 110 26, 148 16" stroke="#6ee7b7" stroke-width="3"
+                fill="none" stroke-linecap="round"/>
+          <path d="M0 0 L-11 -6 L-11 6 Z" fill="#6ee7b7"
+                transform="translate(152 14) rotate(-20)"/>
+
+          <!-- 跑动：虚线弧 + 空心圆 -->
+          <text x="2" y="58" fill="#9fb0c0" font-size="10.5">跑动</text>
+          <path d="M2 78 C 52 78, 112 72, 150 62" stroke="#ffd24a" stroke-width="3"
+                fill="none" stroke-dasharray="8 6" stroke-linecap="round"/>
+          <circle cx="154" cy="60" r="6" fill="none" stroke="#ffd24a" stroke-width="3"/>
+
+          <!-- 阻挡：点线 + T 字 -->
+          <text x="2" y="102" fill="#9fb0c0" font-size="10.5">阻挡</text>
+          <path d="M2 120 L142 120" stroke="#c4b5fd" stroke-width="3.6"
+                fill="none" stroke-dasharray="2 5" stroke-linecap="round"/>
+          <line x1="146" y1="110" x2="146" y2="130" stroke="#c4b5fd"
+                stroke-width="4" stroke-linecap="round"/>
+        </svg>
       </div>
 
       <div class="aside-h">快捷键</div>
@@ -373,6 +400,8 @@ footer{
   <div class="pm-item" data-act="run">🏃&nbsp; 画跑动路线<span class="k">R</span></div>
   <div class="pm-item" data-act="pass">🎯&nbsp; 画传球路线<span class="k">P</span></div>
   <div class="pm-item" data-act="block">🧱&nbsp; 画阻挡路线<span class="k">B</span></div>
+  <div class="pm-item" data-act="tree">📐&nbsp; 标准路线（9 大）<span class="k">▸</span></div>
+  <div class="pm-sub" id="pmTree"></div>
   <div class="pm-sep"></div>
   <div class="pm-item" data-act="undo">↩️&nbsp; 撤销此球员移动<span class="k">Ctrl+Z</span></div>
   <div class="pm-item" data-act="undoAll">⟲⟲&nbsp; 退回初始位置</div>
@@ -1025,12 +1054,96 @@ function render() {
   });
 }
 
+// ============================================================
+//  路径平滑（Catmull-Rom → 三次贝塞尔）：跑动/传球默认画弧线
+// ============================================================
+function smoothPathD(pts, tension) {
+  if (tension === undefined) tension = 0.5;
+  if (!pts || pts.length === 0) return "";
+  if (pts.length === 1) return `M${pts[0].x} ${pts[0].y}`;
+  if (pts.length === 2 || tension === 0)
+    return pts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ");
+  let d = `M${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) * tension / 3;
+    const c1y = p1.y + (p2.y - p0.y) * tension / 3;
+    const c2x = p2.x - (p3.x - p1.x) * tension / 3;
+    const c2y = p2.y - (p3.y - p1.y) * tension / 3;
+    d += ` C${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+// ============================================================
+//  外接手 9 大基础路线（Route Tree）——相对球员位置，向前 = -y
+// ============================================================
+const ROUTE_TREE = [
+  { name: "Go / Fly 直飞", note: "垂直直插到底线，甩开盯防",
+   pts: [[0,0],[0,-70],[0,-190]] },
+  { name: "Slant 斜插", note: "向前3步后内侧45°切入",
+   pts: [[0,0],[0,-45],[-85,-130]] },
+  { name: "Out 外切", note: "向前后90°向边线切出",
+   pts: [[0,0],[0,-75],[85,-75]] },
+  { name: "In / Dig 内切", note: "向前后90°向中路切入",
+   pts: [[0,0],[0,-75],[-85,-75]] },
+  { name: "Corner 外侧斜上", note: "向外上方弧线打身后",
+   pts: [[0,0],[0,-55],[55,-120],[115,-165]] },
+  { name: "Post 内侧斜上", note: "向内上方弧线冲击端区",
+   pts: [[0,0],[0,-55],[-55,-120],[-115,-165]] },
+  { name: "Curl 急停回身", note: "跑8码后急停回头接球",
+   pts: [[0,0],[0,-85],[-18,-72],[-22,-55]] },
+  { name: "Comeback 回跑", note: "跑深后回身向后迎球",
+   pts: [[0,0],[0,-135],[-32,-108],[-45,-85]] },
+  { name: "Flat 平出", note: "短距离向外侧拉开",
+   pts: [[0,0],[42,-28],[88,-38]] }
+];
+
+// 以球员为起点生成路线（支持左右镜像）
+function buildTreeRoute(form, player, mirror) {
+  const base = player || { x: 250, y: 300 };
+  const dir = mirror ? -1 : 1;
+  return {
+    id: state.nextId++,
+    side: player ? player.side : state.side,
+    type: "run",
+    pts: form.pts.map(p => ({ x: base.x + p[0] * dir, y: base.y + p[1] })),
+    player: player ? player.id : null
+  };
+}
+
+// 计算路线终点的切线方向（角度制）。曲线用真实切线，避免箭头与弧线末端错位
+function routeEndAngle(pathEl, pts, isBlock) {
+  if (!pts || pts.length < 2) return 0;
+  if (!isBlock && pathEl) {
+    try {
+      const L = pathEl.getTotalLength();
+      if (L > 2) {
+        const p1 = pathEl.getPointAtLength(L);
+        const p0 = pathEl.getPointAtLength(Math.max(0, L - 10));
+        const dx = p1.x - p0.x, dy = p1.y - p0.y;
+        if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6)
+          return Math.atan2(dy, dx) * 180 / Math.PI;
+      }
+    } catch (err) { /* 老浏览器兜底 */ }
+  }
+  const a = pts[pts.length - 2], b = pts[pts.length - 1];
+  return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+}
+
 function drawRoute(g, r, isDraft) {
   if (!r.pts || r.pts.length < 1) return;
   const color = COLORS[r.type] || COLORS.run;
   const dash = r.type === "run" ? "8 6" : r.type === "block" ? "2 5" : "none";
+  const isBlock = r.type === "block";
 
-  const d = r.pts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ");
+  // 跑动/传球走弧线（Catmull-Rom 平滑），阻挡保持直线
+  const d = isBlock
+    ? r.pts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")
+    : smoothPathD(r.pts, 0.5);
 
   // 加宽的透明命中区
   el("path", {
@@ -1038,7 +1151,7 @@ function drawRoute(g, r, isDraft) {
     "stroke-width": 16, stroke: "transparent", fill: "none"
   }, g);
 
-  el("path", {
+  const mainPath = el("path", {
     d, fill: "none", stroke: color,
     "stroke-width": r.type === "block" ? 4 : 3.4,
     "stroke-dasharray": dash, "stroke-linecap": "round",
@@ -1047,8 +1160,9 @@ function drawRoute(g, r, isDraft) {
 
   // 终点标记：传球=箭头 ▶ ｜ 跑动=空心圆 ○ ｜ 阻挡=T 字 ─┴─
   if (r.pts.length >= 2) {
-    const a = r.pts[r.pts.length - 2], b = r.pts[r.pts.length - 1];
-    const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+    const b = r.pts[r.pts.length - 1];
+    // 用曲线真实切线定方向，保证箭头沿虚线/弧线前进方向延伸
+    const ang = routeEndAngle(mainPath, r.pts, isBlock);
     const op = isDraft ? .72 : .95;
 
     if (r.type === "pass") {
@@ -1161,6 +1275,21 @@ function showPlayerMenu(p, cx, cy) {
     if (act === "undoAll") it.style.opacity = histN > 1 ? 1 : .38;
   });
   PM.classList.add("show");
+  // 填充标准路线子菜单（9 大基础路线）
+  const treeBox = $("#pmTree");
+  if (treeBox && !treeBox.dataset.filled) {
+    treeBox.innerHTML = "";
+    ROUTE_TREE.forEach((rt, idx) => {
+      const it = document.createElement("div");
+      it.className = "pm-tree";
+      it.dataset.idx = idx;
+      it.innerHTML = `<span>${rt.name}</span><span class="tn">${idx + 1}</span>`;
+      it.title = rt.note;
+      treeBox.appendChild(it);
+    });
+    treeBox.dataset.filled = "1";
+  }
+  if (treeBox) treeBox.classList.remove("open");
   // 定位：跟随指针，且不出屏
   const w = 178, h = PM.offsetHeight || 250;
   let x = cx + 12, y = cy - 10;
@@ -1176,6 +1305,30 @@ function hidePlayerMenu() {
 }
 
 PM.addEventListener("click", e => {
+  // 标准路线子项：直接生成路线
+  const treeIt = e.target.closest(".pm-tree");
+  if (treeIt && pmPlayerId !== null) {
+    const p = state.players.find(x => x.id === pmPlayerId);
+    const idx = parseInt(treeIt.dataset.idx, 10);
+    const rt = ROUTE_TREE[idx];
+    if (p && rt) {
+      pushUndo();
+      const mirror = p.side === "def" || p.x > (FIELD.x + FIELD.w / 2);
+      const route = buildTreeRoute(rt, p, mirror);
+      state.routes.push(route);
+      hidePlayerMenu();
+      render(); updateStats(); refreshSelPanel();
+      toast(`已给 ${p.num} 加上「${rt.name}」`);
+    }
+    return;
+  }
+  // 标准路线开关：展开/收起子菜单
+  const treeToggle = e.target.closest('[data-act="tree"]');
+  if (treeToggle) {
+    const sub = $("#pmTree");
+    if (sub) sub.classList.toggle("open");
+    return;
+  }
   const it = e.target.closest(".pm-item");
   if (!it || pmPlayerId === null) return;
   const p = state.players.find(x => x.id === pmPlayerId);
@@ -1246,18 +1399,53 @@ function openNewFormDialog(side) {
   setTimeout(() => $("#fmName").focus(), 40);
 }
 
+// 生成阵型站位缩略图（内联 SVG，按模板坐标实时渲染）
+function buildFormationPreview(form, side) {
+  const W = 178, H = 108;
+  const color = side === "off" ? "#4da3ff" : "#ff6b5d";
+  const pts = (form && form.pts) || [];
+  // 球场底：横条（进攻在左，防守在右）
+  let s = `<svg class="tpl-preview" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  s += `<rect x="0" y="0" width="${W}" height="${H}" rx="5" fill="#1a4228"/>`;
+  // 端区
+  s += `<rect x="0" y="0" width="16" height="${H}" rx="4" fill="#123020"/>`;
+  s += `<rect x="${W - 16}" y="0" width="16" height="${H}" rx="4" fill="#123020"/>`;
+  // 码线（每 20% 一根）
+  for (let i = 1; i <= 4; i++) {
+    const x = 16 + (W - 32) * i / 5;
+    s += `<line class="pv-yard" x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${H}"/>`;
+  }
+  // 中线
+  s += `<line x1="${W / 2}" y1="0" x2="${W / 2}" y2="${H}" stroke="rgba(255,255,255,.22)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  // 球员点
+  pts.forEach(p => {
+    const x = 20 + (p[0] || 0) * (W - 40);
+    const y = 10 + (p[1] || 0) * (H - 20);
+    s += `<circle class="pv-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${color}"/>`;
+  });
+  s += `</svg>`;
+  return s;
+}
+
 function renderTemplateList() {
   const box = $("#fmTemplates");
   box.innerHTML = "";
   const presets = (PRESETS[state.format] && PRESETS[state.format][fmSide]) || [];
 
-  // 空白模板
+  // 空白模板（占位球员预览）
+  const blankForm = { pts: [] };
+  const need = parseInt(state.format, 10);
+  for (let i = 0; i < need; i++) {
+    const t = need === 1 ? 0.5 : i / (need - 1);
+    blankForm.pts.push([0.22 + t * 0.16, 0.18 + t * 0.64]);
+  }
   const blank = document.createElement("div");
   blank.className = "tpl-item on";
   blank.innerHTML =
     `<input type="radio" name="tpl" checked>` +
-    `<div><div class="tname">空白模板</div>` +
-    `<div class="tnote">生成 ${parseInt(state.format,10)} 个占位球员，创建后直接拖动布阵。</div></div>` +
+    `<div class="tmain"><div class="tname">空白模板</div>` +
+    `<div class="tnote">生成 ${need} 个占位球员，创建后直接拖动布阵。</div>` +
+    buildFormationPreview(blankForm, fmSide) + `</div>` +
     `<span class="tbadge blank">空白</span>`;
   blank.onclick = () => pickTpl(box, blank, null);
   box.appendChild(blank);
@@ -1267,7 +1455,8 @@ function renderTemplateList() {
     it.className = "tpl-item";
     it.innerHTML =
       `<input type="radio" name="tpl">` +
-      `<div><div class="tname">${p.name}</div><div class="tnote">${p.note || ""}</div></div>` +
+      `<div class="tmain"><div class="tname">${p.name}</div><div class="tnote">${p.note || ""}</div>` +
+      buildFormationPreview(p, fmSide) + `</div>` +
       `<span class="tbadge">系统预置</span>`;
     it.onclick = () => pickTpl(box, it, p);
     box.appendChild(it);
@@ -1280,8 +1469,9 @@ function renderTemplateList() {
     it.className = "tpl-item";
     it.innerHTML =
       `<input type="radio" name="tpl">` +
-      `<div><div class="tname">${state.renames[c.key] || c.name}</div>` +
-      `<div class="tnote">${c.note || "复制自定义阵型"}</div></div>` +
+      `<div class="tmain"><div class="tname">${state.renames[c.key] || c.name}</div>` +
+      `<div class="tnote">${c.note || "复制自定义阵型"}</div>` +
+      buildFormationPreview(c, fmSide) + `</div>` +
       `<span class="tbadge">我的阵型</span>`;
     it.onclick = () => pickTpl(box, it, c);
     box.appendChild(it);
