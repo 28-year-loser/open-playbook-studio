@@ -553,14 +553,17 @@ aside::-webkit-scrollbar-corner,
 <div id="playerMenu">
   <div class="pm-head" id="pmHead"><b>球员</b></div>
   <div class="pm-item" data-act="move" data-side="both">✋&nbsp; 移动球员<span class="k">V</span></div>
-  <!-- 进攻专属 -->
-  <div class="pm-item" data-act="run" data-side="off">🏃&nbsp; 画跑动路线<span class="k">R</span></div>
-  <div class="pm-item" data-act="pass" data-side="off">🎯&nbsp; 画传球路线<span class="k">P</span></div>
-  <div class="pm-item" data-act="block" data-side="off">🧱&nbsp; 画阻挡路线<span class="k">B</span></div>
+  <!-- 自由路线（攻守通用） -->
+  <div class="pm-item" data-act="run" data-side="both">🏃&nbsp; 画跑动路线<span class="k">R</span></div>
+  <div class="pm-item" data-act="pass" data-side="both">🎯&nbsp; 画传球路线<span class="k">P</span></div>
+  <div class="pm-item" data-act="block" data-side="both">🧱&nbsp; 画阻挡路线<span class="k">B</span></div>
   <div class="pm-item" data-act="tree" data-side="off">📐&nbsp; 标准路线（9 大）<span class="k">▸</span></div>
   <!-- 防守专属 -->
-  <div class="pm-item" data-act="zone" data-side="def">🛡️&nbsp; 区域防守范围<span class="k">Z</span></div>
+  <div class="pm-item" data-act="zone" data-side="def">🛡️&nbsp; 区域防守范围（矩形）<span class="k">Z</span></div>
+  <div class="pm-item" data-act="zoneCircleFree" data-side="def">⭕&nbsp; 圆形区域（自由调节）</div>
+  <div class="pm-item" data-act="zoneCircleFixed" data-side="def">🔵&nbsp; 圆形区域（固定正圆）</div>
   <div class="pm-item" data-act="man" data-side="def">👁️&nbsp; 盯人防守<span class="k">M</span></div>
+  <div class="pm-item danger" data-act="delMan" data-side="def">🚫&nbsp; 删除盯人防守</div>
   <div class="pm-sub" id="pmTree">
     <div class="pm-typeline">
       <span class="lbl">类型</span>
@@ -676,12 +679,13 @@ const state = {
   defense: {
     mode: "zone",        // zone | man
     manAssign: {},       // { 防守球员id: 进攻球员id }
-    zones: []            // [{id, x, y, w, h, label, player}]
+    zones: []            // [{id, shape:"rect"|"circle", x,y,w,h | cx,cy,rx,ry, label, player}]
   },
-  zoneDraft: null,       // 正在拖出的区域
+  zoneDraft: null,       // 正在拖出的区域（矩形 {x,y,w,h} 或圆形 {shape:"circle",mode,cx,cy,rx,ry}）
   players: [],      // {id, side, num, x, y}
   routes: [],       // {id, side, type, pts:[{x,y}], player}
   selected: null,
+  hoverPlayer: null,     // 悬停的球员 id（用于按需显示盯人连线）
   selectedRoute: null,   // 选中的路线 id
   routeEdit: false,      // 折点编辑模式
   drawing: null,    // 正在绘制的路线
@@ -1727,6 +1731,20 @@ function render() {
       state.routes = state.routes.filter(r => r.player !== p.id);
       render(); updateStats(); toast("已删除球员");
     });
+
+    // 悬停跟踪：仅切换盯人连线显隐，不整屏重渲染
+    g.addEventListener("pointerenter", () => {
+      if (String(state.hoverPlayer) !== String(p.id)) {
+        state.hoverPlayer = p.id;
+        updateManCovVisibility();
+      }
+    });
+    g.addEventListener("pointerleave", () => {
+      if (String(state.hoverPlayer) === String(p.id)) {
+        state.hoverPlayer = null;
+        updateManCovVisibility();
+      }
+    });
   });
 
   // 折点手柄画在最上层（球员之上，避免被圆圈遮挡）
@@ -1820,14 +1838,16 @@ function routeEndAngle(pathEl, pts, isBlock) {
 
 function drawRoute(g, r, isDraft) {
   if (!r.pts || r.pts.length < 1) return;
+  // 预览点（r.preview）仅在草稿时追加到路径末端，不并入已定折点，避免重复点
+  const pts = (isDraft && r.preview) ? r.pts.concat([r.preview]) : r.pts;
   const color = COLORS[r.type] || COLORS.run;
   const dash = r.type === "run" ? "8 6" : r.type === "block" ? "2 5" : "none";
   const isBlock = r.type === "block";
 
   // 跑动/传球走弧线（Catmull-Rom 平滑），阻挡保持直线
   const d = isBlock
-    ? r.pts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")
-    : smoothPathD(r.pts, 0.5);
+    ? pts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")
+    : smoothPathD(pts, 0.5);
 
   // 加宽的透明命中区
   el("path", {
@@ -1843,10 +1863,10 @@ function drawRoute(g, r, isDraft) {
   }, g);
 
   // 终点标记：传球=箭头 ▶ ｜ 跑动=空心圆 ○ ｜ 阻挡=T 字 ─┴─
-  if (r.pts.length >= 2) {
-    const b = r.pts[r.pts.length - 1];
+  if (pts.length >= 2) {
+    const b = pts[pts.length - 1];
     // 用曲线真实切线定方向，保证箭头沿虚线/弧线前进方向延伸
-    const ang = routeEndAngle(mainPath, r.pts, isBlock);
+    const ang = routeEndAngle(mainPath, pts, isBlock);
     const op = isDraft ? .72 : .95;
 
     if (r.type === "pass") {
@@ -1891,55 +1911,92 @@ function drawDefense(g) {
   const df = state.defense;
   if (!df) return;
 
-  // 1) 区域防守范围（半透明矩形）
+  // 1) 区域防守范围（矩形或圆形半透明区域）
   (df.zones || []).forEach(z => {
-    el("rect", {
-      x: z.x, y: z.y, width: z.w, height: z.h,
-      fill: "rgba(80,170,255,.18)", stroke: "#5ab0ff",
-      "stroke-width": 2, "stroke-dasharray": "6 4", rx: 6
-    }, g);
-    if (z.label) {
-      const t = el("text", {
-        x: z.x + 8, y: z.y + 18,
-        fill: "#bfe3ff", "font-size": 12, "font-weight": 700
+    if (z.shape === "circle") {
+      el("ellipse", {
+        cx: z.cx, cy: z.cy, rx: z.rx, ry: z.ry,
+        fill: "rgba(80,170,255,.18)", stroke: "#5ab0ff",
+        "stroke-width": 2, "stroke-dasharray": "6 4"
       }, g);
-      t.textContent = z.label;
+      if (z.label) {
+        const t = el("text", {
+          x: z.cx, y: z.cy - z.ry + 16, "text-anchor": "middle",
+          fill: "#bfe3ff", "font-size": 12, "font-weight": 700
+        }, g);
+        t.textContent = z.label;
+      }
+    } else {
+      el("rect", {
+        x: z.x, y: z.y, width: z.w, height: z.h,
+        fill: "rgba(80,170,255,.18)", stroke: "#5ab0ff",
+        "stroke-width": 2, "stroke-dasharray": "6 4", rx: 6
+      }, g);
+      if (z.label) {
+        const t = el("text", {
+          x: z.x + 8, y: z.y + 18,
+          fill: "#bfe3ff", "font-size": 12, "font-weight": 700
+        }, g);
+        t.textContent = z.label;
+      }
     }
   });
   if (state.zoneDraft) {
     const z = state.zoneDraft;
-    el("rect", {
-      x: Math.min(z.x, z.x + z.w), y: Math.min(z.y, z.y + z.h),
-      width: Math.abs(z.w), height: Math.abs(z.h),
-      fill: "rgba(80,170,255,.12)", stroke: "#5ab0ff",
-      "stroke-width": 2, "stroke-dasharray": "4 3", rx: 6
-    }, g);
+    if (z.shape === "circle") {
+      el("ellipse", {
+        cx: z.cx, cy: z.cy, rx: z.rx, ry: z.ry,
+        fill: "rgba(80,170,255,.12)", stroke: "#5ab0ff",
+        "stroke-width": 2, "stroke-dasharray": "4 3"
+      }, g);
+    } else {
+      el("rect", {
+        x: Math.min(z.x, z.x + z.w), y: Math.min(z.y, z.y + z.h),
+        width: Math.abs(z.w), height: Math.abs(z.h),
+        fill: "rgba(80,170,255,.12)", stroke: "#5ab0ff",
+        "stroke-width": 2, "stroke-dasharray": "4 3", rx: 6
+      }, g);
+    }
   }
 
-  // 2) 盯人防守连线（防守球员 → 被盯进攻球员）
+  // 2) 盯人防守连线：平时不显示，仅当鼠标悬停在相关球员上时才画（man-cov 组按需切换）
   const ma = df.manAssign || {};
   Object.keys(ma).forEach(defId => {
     const offId = ma[defId];
     const dp = state.players.find(p => String(p.id) === String(defId));
     const op = state.players.find(p => String(p.id) === String(offId));
     if (!dp || !op) return;
+    const hovered = String(state.hoverPlayer) === String(defId) || String(state.hoverPlayer) === String(offId);
+    const gg = el("g", {
+      class: "man-cov", "data-def": defId, "data-off": offId,
+      style: hovered ? "" : "display:none"
+    }, g);
     el("line", {
       x1: dp.x, y1: dp.y, x2: op.x, y2: op.y,
       stroke: "#ff8c42", "stroke-width": 2.2,
       "stroke-dasharray": "5 4", opacity: .9
-    }, g);
+    }, gg);
     const mx = (dp.x + op.x) / 2, my = (dp.y + op.y) / 2;
-    el("circle", { cx: mx, cy: my, r: 9, fill: "#ff8c42", opacity: .92 }, g);
+    el("circle", { cx: mx, cy: my, r: 9, fill: "#ff8c42", opacity: .92 }, gg);
     const t = el("text", {
       x: mx, y: my + 3.6, fill: "#2a1200",
       "font-size": 10, "font-weight": 700, "text-anchor": "middle"
-    }, g);
+    }, gg);
     t.textContent = "盯";
     el("circle", {
       cx: op.x, cy: op.y, r: PLAYER_R + 6,
       fill: "none", stroke: "#ff8c42",
       "stroke-width": 2, "stroke-dasharray": "3 3", opacity: .85
-    }, g);
+    }, gg);
+  });
+}
+
+// 悬停切换盯人连线显隐（不整屏重渲染，避免闪烁）
+function updateManCovVisibility() {
+  const hv = String(state.hoverPlayer);
+  document.querySelectorAll("#layerDefense .man-cov").forEach(gg => {
+    const a = gg.getAttribute("data-def"), b = gg.getAttribute("data-off");
+    gg.style.display = (hv === String(a) || hv === String(b)) ? "" : "none";
   });
 }
 
@@ -2001,10 +2058,22 @@ function refreshSelPanel() {
   bU.textContent = n ? `⟲ 撤销此球员（剩 ${n}）` : "⟲ 撤销此球员";
 }
 
+// 圆形区域：以球员为圆心，按指针位置设置半径/形状
+function updateZoneCircleRadius(pt) {
+  const z = state.zoneDraft;
+  if (!z || z.shape !== "circle") return;
+  if (z.mode === "fixed") {
+    const r = Math.hypot(pt.x - z.cx, pt.y - z.cy);
+    z.rx = r; z.ry = r;
+  } else {
+    z.rx = Math.abs(pt.x - z.cx);
+    z.ry = Math.abs(pt.y - z.cy);
+  }
+}
+
 function svgPoint(e) {
   const svg = $("#board");
-  const pt = svg.createSVGPoint();
-  pt.x = e.clientX; pt.y = e.clientY;
+  const pt = svg.createSVGPoint();  pt.x = e.clientX; pt.y = e.clientY;
   return pt.matrixTransform(svg.getScreenCTM().inverse());
 }
 
@@ -2032,6 +2101,12 @@ function showPlayerMenu(p, cx, cy) {
     const s = el.dataset.side;
     el.style.display = (s === "both" || s === p.side) ? "" : "none";
   });
+  // 「删除盯人防守」仅在该球员当前有盯防关系时显示
+  const delManIt = PM.querySelector('[data-act="delMan"]');
+  if (delManIt) {
+    const hasMan = !!(state.defense.manAssign && state.defense.manAssign[p.id]);
+    delManIt.style.display = (p.side === "def" && hasMan) ? "" : "none";
+  }
   // 进攻：填充标准路线子菜单
   const treeBox = $("#pmTree");
   if (p.side === "off" && treeBox && !treeBox.dataset.filled) {
@@ -2134,6 +2209,39 @@ PM.addEventListener("click", e => {
     toast("拖出区域范围（松手完成，Esc 取消）");
     return;
   }
+  // 防守菜单：圆形区域（自由调节 / 固定正圆）→ 以球员为圆心拖动设置
+  const zcFree = e.target.closest('[data-act="zoneCircleFree"]');
+  const zcFixed = e.target.closest('[data-act="zoneCircleFixed"]');
+  if ((zcFree || zcFixed) && pmPlayerId !== null) {
+    const p = state.players.find(x => x.id === pmPlayerId);
+    hidePlayerMenu();
+    if (p) {
+      const mode = zcFree ? "free" : "fixed";
+      state.zoneDraft = {
+        shape: "circle", mode,
+        cx: p.x, cy: p.y, rx: 0, ry: 0,
+        player: pmPlayerId
+      };
+      $("#status").innerHTML = mode === "free"
+        ? "<b>圆形区域（自由调节）</b> — 以球员为圆心，<b>拖动鼠标</b>调节椭圆形状与大小，松手完成。"
+        : "<b>圆形区域（固定正圆）</b> — 以球员为圆心，<b>拖动鼠标</b>设置半径，松手完成。";
+      $("#pillTool").textContent = "工具：圆形区域";
+      toast(mode === "free" ? "拖动调节椭圆形状（松手完成，Esc 取消）" : "拖动设置正圆半径（松手完成，Esc 取消）");
+    }
+    return;
+  }
+  // 防守菜单：删除盯人防守
+  const delManBtn = e.target.closest('[data-act="delMan"]');
+  if (delManBtn && pmPlayerId !== null) {
+    const defId = pmPlayerId;
+    if (state.defense.manAssign && state.defense.manAssign[defId]) {
+      delete state.defense.manAssign[defId];
+      hidePlayerMenu();
+      render(); updateStats(); refreshSelPanel();
+      toast("已删除盯人防守");
+    }
+    return;
+  }
   // 标准路线子项：直接生成路线
   const treeIt = e.target.closest(".pm-tree");
   if (treeIt && pmPlayerId !== null && treeIt.dataset.idx !== undefined) {
@@ -2180,12 +2288,13 @@ PM.addEventListener("click", e => {
     state.selected = p.id;
     state.drawing = {
       id: state.nextId++, side: p.side,
-      type: act, pts: [{ x: p.x, y: p.y }], player: p.id
+      type: act, pts: [{ x: p.x, y: p.y }], player: p.id,
+      preview: { x: p.x, y: p.y }   // 预览点
     };
     render(); refreshSelPanel();
     $("#status").innerHTML =
-      `<b>${names[act]}路线</b> — 从 <b>${p.num}</b> 开始，沿途<b>点击添加折点</b>，<b>双击</b>完成。`;
-    toast(`开始画${names[act]}路线：点折点 → 双击收尾`);
+      `<b>${names[act]}路线</b> — 从 <b>${p.num}</b> 开始，<b>左键</b>沿途加折点，<b>右键</b>结束。`;
+    toast(`开始画${names[act]}路线：左键加折点 → 右键收尾`);
   } else if (act === "undo") {
     if (undoPlayer(p)) toast(`已撤销 ${p.num} 的上一步移动`);
     else toast("该球员没有可撤销的移动");
@@ -2462,6 +2571,7 @@ function drawRouteHandles(g) {
 let ptDrag = null;
 
 function startDrag(e, p) {
+  if (e.button === 2) return; // 右键不开启拖拽/画线，冒泡给 contextmenu 收尾路线
   e.stopPropagation();
   if (state.tool === "erase") {
     pushUndo();
@@ -2494,7 +2604,8 @@ function startDrag(e, p) {
   state.drawing = {
     id: state.nextId++,
     side: p.side, type: state.tool === "run" ? "run" : state.tool === "pass" ? "pass" : "block",
-    pts: [{ x: pt.x, y: pt.y }], player: p.id
+    pts: [{ x: pt.x, y: pt.y }], player: p.id,
+    preview: { x: pt.x, y: pt.y }   // 预览点，跟随指针，右键/左键才确定
   };
   render();
 }
@@ -2527,18 +2638,27 @@ $("#board").addEventListener("pointerdown", e => {
       return;
     }
   }
-  // 区域防守：开始拖出矩形
+  // 区域防守：开始拖出区域
   if (state.zoneDraft) {
     const pt = svgPoint(e);
-    state.zoneDraft.x = pt.x; state.zoneDraft.y = pt.y;
-    state.zoneDraft.w = 0; state.zoneDraft.h = 0;
-    state.zoneDraft.dragging = true;
+    if (state.zoneDraft.shape === "circle") {
+      // 圆心固定在球员，拖动设置半径/形状
+      state.zoneDraft.dragging = true;
+      updateZoneCircleRadius(pt);
+    } else {
+      state.zoneDraft.x = pt.x; state.zoneDraft.y = pt.y;
+      state.zoneDraft.w = 0; state.zoneDraft.h = 0;
+      state.zoneDraft.dragging = true;
+    }
     render();
     return;
   }
   if (state.drawing) {
+    if (e.button === 2) return; // 右键用于结束路线，不加点
     const pt = svgPoint(e);
+    // 落定一个折点（当前预览点）
     state.drawing.pts.push({ x: pt.x, y: pt.y });
+    state.drawing.preview = { x: pt.x, y: pt.y };
     render();
     return;
   }
@@ -2561,11 +2681,15 @@ $("#board").addEventListener("pointermove", e => {
     }
     return;
   }
-  // 区域防守：拖出矩形
+  // 区域防守：拖动设置区域
   if (state.zoneDraft && state.zoneDraft.dragging) {
     const pt = svgPoint(e);
-    state.zoneDraft.w = pt.x - state.zoneDraft.x;
-    state.zoneDraft.h = pt.y - state.zoneDraft.y;
+    if (state.zoneDraft.shape === "circle") {
+      updateZoneCircleRadius(pt);
+    } else {
+      state.zoneDraft.w = pt.x - state.zoneDraft.x;
+      state.zoneDraft.h = pt.y - state.zoneDraft.y;
+    }
     render();
     return;
   }
@@ -2588,16 +2712,9 @@ $("#board").addEventListener("pointermove", e => {
   }
   if (state.drawing && state.drawing.pts.length) {
     const pt = svgPoint(e);
-    // 实时预览：把最后一个点跟着指针
-    if (state.drawing.pts.length >= 1) {
-      const last = state.drawing.pts[state.drawing.pts.length - 1];
-      if (state.drawing.pts.length === 1) {
-        state.drawing.pts.push({ x: pt.x, y: pt.y });
-      } else {
-        last.x = pt.x; last.y = pt.y;
-      }
-      render();
-    }
+    // 实时预览：预览点跟随指针（不并入已定折点）
+    state.drawing.preview = { x: pt.x, y: pt.y };
+    render();
   }
 });
 
@@ -2615,17 +2732,31 @@ $("#board").addEventListener("pointerup", e => {
   // 区域防守：完成
   if (state.zoneDraft && state.zoneDraft.dragging) {
     const z = state.zoneDraft;
-    const x = Math.min(z.x, z.x + z.w), y = Math.min(z.y, z.y + z.h);
-    const w = Math.abs(z.w), h = Math.abs(z.h);
-    if (w > 16 && h > 12) {
-      pushUndo();
-      state.defense.zones.push({
-        id: "z-" + Date.now().toString(36),
-        x, y, w, h,
-        label: "Zone " + (state.defense.zones.length + 1),
-        player: z.player
-      });
-      toast(`已添加区域防守范围（共 ${state.defense.zones.length} 个）`);
+    if (z.shape === "circle") {
+      if (z.rx > 10 && z.ry > 10) {
+        pushUndo();
+        state.defense.zones.push({
+          id: "z-" + Date.now().toString(36),
+          shape: "circle", mode: z.mode,
+          cx: z.cx, cy: z.cy, rx: z.rx, ry: z.ry,
+          label: "Zone " + (state.defense.zones.length + 1),
+          player: z.player
+        });
+        toast(`已添加圆形区域防守（共 ${state.defense.zones.length} 个）`);
+      }
+    } else {
+      const x = Math.min(z.x, z.x + z.w), y = Math.min(z.y, z.y + z.h);
+      const w = Math.abs(z.w), h = Math.abs(z.h);
+      if (w > 16 && h > 12) {
+        pushUndo();
+        state.defense.zones.push({
+          id: "z-" + Date.now().toString(36),
+          x, y, w, h,
+          label: "Zone " + (state.defense.zones.length + 1),
+          player: z.player
+        });
+        toast(`已添加区域防守范围（共 ${state.defense.zones.length} 个）`);
+      }
     }
     state.zoneDraft = null;
     $("#pillTool").textContent = "工具：选择";
@@ -2652,15 +2783,47 @@ $("#board").addEventListener("pointerup", e => {
   }
 });
 
+// 收尾当前正在画的路线（左键加点 → 右键/双击结束）
+function finalizeDrawing() {
+  const dr = state.drawing;
+  if (dr && dr.pts.length >= 1) {
+    // 把最后的预览点落定为终点（若与最后折点不重合）
+    if (dr.preview) {
+      const lp = dr.pts[dr.pts.length - 1];
+      if (Math.hypot(dr.preview.x - lp.x, dr.preview.y - lp.y) > 1)
+        dr.pts.push({ x: dr.preview.x, y: dr.preview.y });
+    }
+    delete dr.preview;
+    if (dr.pts.length >= 2) {
+      pushUndo();
+      state.routes.push(dr);
+      const n = dr.pts.length;
+      state.drawing = null;
+      render(); updateStats();
+      toast("路线已添加（" + n + " 个折点）");
+      return true;
+    }
+  }
+  state.drawing = null;
+  render();
+  return false;
+}
+
+// 右键结束路线（req：左键开始，右键结束）
+$("#board").addEventListener("contextmenu", e => {
+  if (state.drawing) {
+    e.preventDefault();
+    finalizeDrawing();
+    e.stopPropagation();
+    return;
+  }
+  // 画线过程中禁止弹出浏览器右键菜单
+  if (state.tool !== "select" || state.zoneDraft) e.preventDefault();
+});
+
 $("#board").addEventListener("dblclick", e => {
-  if (state.drawing && state.drawing.pts.length >= 2) {
-    // 去掉最后一个（可能是预览点）多余点
-    pushUndo();
-    state.routes.push(state.drawing);
-    const n = state.drawing.pts.length;
-    state.drawing = null;
-    render(); updateStats();
-    toast("路线已添加（" + n + " 个折点）");
+  if (state.drawing) {
+    finalizeDrawing();
     e.stopPropagation();
   }
 });
@@ -2670,11 +2833,7 @@ let lastTap = 0;
 $("#board").addEventListener("pointerup", e => {
   const now = Date.now();
   if (now - lastTap < 330 && state.drawing && state.drawing.pts.length >= 2) {
-    pushUndo();
-    state.routes.push(state.drawing);
-    state.drawing = null;
-    render(); updateStats();
-    toast("路线已添加");
+    finalizeDrawing();
   }
   lastTap = now;
 });
@@ -2692,7 +2851,7 @@ function setTool(t) {
     ? "拖动球员移动位置，双击球员删除。"
     : t === "erase"
       ? "点击球员或路线即可删除。"
-      : `<b>${names[t]}</b> — 点击球员开始，沿途<b>点击添加折点</b>，<b>双击</b>完成路线。`;
+      : `<b>${names[t]}</b> — <b>左键</b>点球员开始，沿途<b>左键</b>加折点，<b>右键</b>结束路线。`;
   if (state.drawing) { state.drawing = null; render(); }
 }
 
