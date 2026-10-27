@@ -545,62 +545,62 @@ const FORMATIONS = {
   8: {
     off: [
       {
-        name: "T Formation", note: "8 人制经典 T 阵",
+        name: "T Formation", note: "8 人制 T 阵（5 锋线 + QB + 2 跑卫）",
         pts: [
-          [.28, .50], [.24, .50], [.32, .38], [.32, .46], [.32, .54], [.32, .62],
-          [.28, .28], [.28, .72], [.20, .50]
+          [.28, .50], [.33, .28], [.33, .40], [.33, .50], [.33, .60], [.33, .72],
+          [.23, .42], [.23, .58]
         ],
-        nums: ["QB", "RB", "LT", "LG", "C", "RG", "RT", "WR", "WR"]
+        nums: ["QB", "LT", "LG", "C", "RG", "RT", "LH", "RH"]
       },
       {
         name: "8-Man Shotgun", note: "8 人制散弹枪",
         pts: [
-          [.22, .50], [.16, .50], [.30, .28], [.30, .38], [.30, .48], [.30, .60],
-          [.30, .72], [.30, .82], [.24, .80]
+          [.22, .50], [.16, .50], [.30, .28], [.30, .38], [.30, .50],
+          [.30, .62], [.30, .72], [.30, .84]
         ],
-        nums: ["QB", "RB", "WR", "C", "LG", "RG", "LT", "RT", "WR"]
+        nums: ["QB", "RB", "LT", "LG", "C", "RG", "RT", "WR"]
       },
       {
         name: "Single Wing", note: "单翼，侧向冲球",
         pts: [
-          [.26, .50], [.22, .50], [.32, .34], [.32, .42], [.32, .58], [.32, .66],
-          [.24, .30], [.24, .70], [.18, .42]
+          [.26, .50], [.21, .50], [.32, .30], [.32, .40], [.32, .50],
+          [.32, .60], [.32, .70], [.24, .24]
         ],
-        nums: ["QB", "TB", "LT", "C", "RG", "RT", "LE", "RE", "FB"]
+        nums: ["QB", "TB", "LT", "LG", "C", "RG", "RT", "LE"]
       }
     ],
     def: [
       {
-        name: "3-2-2", note: "8 人制标准防守",
+        name: "3-2-3", note: "8 人制标准防守（3 锋 2 卫 3 后卫）",
         pts: [
-          [.40, .38], [.40, .50], [.40, .62],
+          [.40, .36], [.40, .50], [.40, .64],
           [.48, .42], [.48, .58],
-          [.58, .30], [.58, .50], [.58, .70]
+          [.58, .28], [.58, .50], [.58, .72]
         ],
         nums: ["DE", "NG", "DE", "LB", "LB", "CB", "S", "CB"]
       },
       {
-        name: "4-2-1", note: "强冲传",
+        name: "4-2-2", note: "8 人制强冲传（4 锋 2 卫 2 后卫）",
         pts: [
           [.40, .32], [.40, .42], [.40, .58], [.40, .68],
           [.48, .42], [.48, .58],
-          [.58, .50], [.56, .26], [.56, .74]
+          [.58, .30], [.58, .70]
         ],
-        nums: ["DE", "DT", "DT", "DE", "LB", "LB", "S", "CB", "CB"]
+        nums: ["DE", "DT", "DT", "DE", "LB", "LB", "CB", "S"]
       }
     ]
   },
   5: {
     off: [
       {
-        name: "Trips Right", note: "5 人制三右",
-        pts: [[.26, .50], [.18, .50], [.32, .26], [.32, .38], [.32, .62], [.32, .74]],
-        nums: ["QB", "RB", "WR", "WR", "WR", "WR"]
+        name: "Trips Right", note: "5 人制三右（QB + RB + 3 外接手）",
+        pts: [[.26, .50], [.18, .50], [.32, .28], [.32, .42], [.32, .66]],
+        nums: ["QB", "RB", "WR", "WR", "WR"]
       },
       {
-        name: "Bunch", note: "簇群站位",
-        pts: [[.26, .50], [.18, .50], [.30, .38], [.32, .46], [.32, .54], [.30, .62]],
-        nums: ["QB", "RB", "WR", "WR", "WR", "WR"]
+        name: "Bunch", note: "簇群站位（QB + RB + 3 簇群）",
+        pts: [[.26, .50], [.18, .50], [.30, .42], [.32, .50], [.30, .58]],
+        nums: ["QB", "RB", "WR", "WR", "WR"]
       }
     ],
     def: [
@@ -641,8 +641,23 @@ function renderFormationButtons() {
   $("#pillFormat").textContent = state.format + " 人制";
 }
 
-function applyFormation(form, side) {
-  pushUndo();
+function validateFormation(form, fmt) {
+  const need = parseInt(fmt, 10);
+  if (form.pts.length !== form.nums.length)
+    return `阵型「${form.name}」坐标数(${form.pts.length})与位置标签数(${form.nums.length})不一致`;
+  if (form.pts.length !== need)
+    return `阵型「${form.name}」有 ${form.pts.length} 人，但 ${need} 人制应为 ${need} 人`;
+  return null;
+}
+
+function applyFormation(form, side, skipUndo) {
+  const err = validateFormation(form, state.format);
+  if (err) {
+    toast("⚠️ " + err);
+    console.error(err);
+    return;
+  }
+  if (!skipUndo) pushUndo();
   // 只替换该侧球员
   state.players = state.players.filter(p => p.side !== side);
   state.routes = state.routes.filter(r => r.side !== side);
@@ -910,7 +925,16 @@ $("#selFormat").onchange = e => {
   pushUndo();
   state.format = parseInt(e.target.value, 10);
   renderFormationButtons();
-  toast("已切换到 " + state.format + " 人制");
+  // 切换人制必须清场，否则会出现不同人制的球员混在场上
+  state.players = [];
+  state.routes = [];
+  state.selected = null;
+  state.drawing = null;
+  const f = FORMATIONS[state.format];
+  if (f && f.off && f.off.length) applyFormation(f.off[0], "off", true);
+  if (f && f.def && f.def.length) applyFormation(f.def[0], "def", true);
+  render(); updateStats();
+  toast("已切换到 " + state.format + " 人制（场上已重置）");
 };
 
 $("#btnUndo").onclick = undo;
