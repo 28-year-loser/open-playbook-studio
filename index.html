@@ -128,24 +128,24 @@ footer{
   max-height:72vh; overflow-y:auto; overflow-x:hidden;
 }
 #playerMenu.show{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
-#playerMenu .pm-head{
+.pm-head{
   padding:9px 13px; background:#24313d; border-bottom:1px solid #334655;
   font-size:12px; color:#9fb0c0;
 }
-#playerMenu .pm-head b{color:#fff;font-size:13.5px}
-#playerMenu .pm-item{
+.pm-head b{color:#fff;font-size:13.5px}
+.pm-item{
   display:flex; align-items:center; gap:9px;
   padding:9px 13px; font-size:12.5px; cursor:pointer;
   border-left:3px solid transparent; color:var(--fg);
 }
-#playerMenu .pm-item:hover{background:#2a3a48;border-left-color:var(--accent)}
-#playerMenu .pm-item.danger:hover{background:#3a2226;border-left-color:var(--danger)}
-#playerMenu .pm-item .k{
+.pm-item:hover{background:#2a3a48;border-left-color:var(--accent)}
+.pm-item.danger:hover{background:#3a2226;border-left-color:var(--danger)}
+.pm-item .k{
   margin-left:auto; font-size:9.5px; color:#7d8fa0;
   background:#16202a; padding:2px 6px; border-radius:4px;
 }
-#playerMenu .pm-sep{height:1px;background:#2e3a46;margin:3px 0}
-#playerMenu .pm-item.active{background:#2b4256;border-left-color:var(--accent2)}
+.pm-sep{height:1px;background:#2e3a46;margin:3px 0}
+.pm-item.active{background:#2b4256;border-left-color:var(--accent2)}
 #playerMenu .pm-sub{display:none;background:#162029;border-top:1px solid #2e3a46;
   max-height:230px; overflow-y:auto; overflow-x:hidden}
 #playerMenu .pm-sub.open{display:block}
@@ -307,6 +307,18 @@ footer{
   }
   .pb-page:last-child{ page-break-after: auto; break-after: auto; }
 }
+
+#routeMenu{
+  position:fixed; z-index:60; min-width:172px;
+  background:#1c2732; border:1px solid #3d5163; border-radius:11px;
+  box-shadow:0 14px 40px rgba(0,0,0,.5); overflow:hidden;
+  opacity:0; pointer-events:none; transform:translateY(-6px) scale(.97);
+  transition:opacity .13s, transform .13s;
+  max-height:70vh; overflow-y:auto;
+}
+#routeMenu.show{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
+.route-handle{cursor:grab}
+.route-handle:hover{cursor:grabbing}
 
 #toast{
   position:fixed;left:50%;bottom:70px;transform:translateX(-50%) translateY(12px);
@@ -518,6 +530,18 @@ footer{
   <div class="pm-item danger" data-act="del" data-side="both">🗑️&nbsp; 删除此球员</div>
 </div>
 
+<div id="routeMenu">
+  <div class="pm-head" id="rmHead"><b>路线</b></div>
+  <div class="pm-item" data-ract="edit">✏️&nbsp; 编辑折点<span class="k">E</span></div>
+  <div class="pm-item" data-ract="addpt">➕&nbsp; 追加折点</div>
+  <div class="pm-sep"></div>
+  <div class="pm-item" data-ract="run">🏃&nbsp; 改为跑动路线</div>
+  <div class="pm-item" data-ract="pass">🎯&nbsp; 改为传球路线</div>
+  <div class="pm-item" data-ract="block">🧱&nbsp; 改为阻挡路线</div>
+  <div class="pm-sep"></div>
+  <div class="pm-item danger" data-ract="del">🗑️&nbsp; 删除此路线</div>
+</div>
+
 <div class="modal-mask" id="formModal">
   <div class="modal-card">
     <div class="modal-title" id="fmTitle">新建进攻阵型</div>
@@ -612,6 +636,8 @@ const state = {
   players: [],      // {id, side, num, x, y}
   routes: [],       // {id, side, type, pts:[{x,y}], player}
   selected: null,
+  selectedRoute: null,   // 选中的路线 id
+  routeEdit: false,      // 折点编辑模式
   drawing: null,    // 正在绘制的路线
   nextId: 1
 };
@@ -1656,6 +1682,9 @@ function render() {
       render(); updateStats(); toast("已删除球员");
     });
   });
+
+  // 折点手柄画在最上层（球员之上，避免被圆圈遮挡）
+  drawRouteHandles(gP);
 }
 
 // ============================================================
@@ -2130,6 +2159,8 @@ PM.addEventListener("click", e => {
 // 点菜单外 / Esc 关闭
 document.addEventListener("pointerdown", e => {
   if (!e.target.closest("#playerMenu")) hidePlayerMenu();
+  if (!e.target.closest("#routeMenu") && !e.target.closest(".route-hit") && !e.target.closest(".route-handle"))
+    hideRouteMenu();
 }, true);
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") hidePlayerMenu();
@@ -2291,6 +2322,99 @@ $("#fmName").addEventListener("keydown", e => {
   if (e.target === m) m.classList.remove("show");
 }));
 
+// ---------- 路线独立操作：选中 / 编辑折点 / 删除 ----------
+const RTM = $("#routeMenu");
+let rmRouteId = null;
+
+function showRouteMenu(route, cx, cy) {
+  rmRouteId = route.id;
+  const tname = { run: "跑动", pass: "传球", block: "阻挡" }[route.type] || route.type;
+  $("#rmHead").innerHTML =
+    `<b>${tname}路线</b> &nbsp;` +
+    `<span style="opacity:.7">(${route.pts.length} 折点)</span>`;
+  // 当前类型高亮
+  RTM.querySelectorAll("[data-ract]").forEach(it =>
+    it.classList.toggle("active", it.dataset.ract === route.type));
+  RTM.classList.add("show");
+  const w = 178, h = RTM.offsetHeight || 230;
+  let x = cx + 12, y = cy - 10;
+  if (x + w > window.innerWidth - 8) x = cx - w - 12;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  if (y < 8) y = 8;
+  RTM.style.left = x + "px";
+  RTM.style.top = y + "px";
+}
+function hideRouteMenu() { RTM.classList.remove("show"); rmRouteId = null; }
+
+RTM.addEventListener("click", e => {
+  const it = e.target.closest("[data-ract]");
+  if (!it || rmRouteId === null) return;
+  const r = state.routes.find(x => x.id === rmRouteId);
+  const act = it.dataset.ract;
+  hideRouteMenu();
+  if (!r) return;
+
+  if (act === "del") {
+    pushUndo();
+    state.routes = state.routes.filter(x => x.id !== r.id);
+    state.selectedRoute = null; state.routeEdit = false;
+    render(); updateStats();
+    toast("已删除该路线（其他路线不受影响）");
+  } else if (act === "run" || act === "pass" || act === "block") {
+    pushUndo();
+    r.type = act;
+    render(); updateStats();
+    toast(`已改为${{ run: "跑动", pass: "传球", block: "阻挡" }[act]}路线`);
+  } else if (act === "edit") {
+    state.routeEdit = true;
+    render();
+    $("#status").innerHTML =
+      "<b>编辑折点</b> — 拖动<b>折点手柄</b>调整形状；按 <b>Esc</b> 完成。";
+    toast("拖动折点调整路线形状");
+  } else if (act === "addpt") {
+    pushUndo();
+    // 在终点后追加一个点（沿当前方向延伸）
+    const n = r.pts.length;
+    if (n >= 2) {
+      const a = r.pts[n - 2], b = r.pts[n - 1];
+      r.pts.push({ x: b.x + (b.x - a.x) * 0.6, y: b.y + (b.y - a.y) * 0.6 });
+    } else {
+      r.pts.push({ x: r.pts[0].x + 60, y: r.pts[0].y });
+    }
+    state.selectedRoute = r.id;
+    state.routeEdit = true;
+    render();
+    toast("已追加折点，拖动它调整");
+  }
+});
+
+// 绘制选中路线的折点手柄
+function drawRouteHandles(g) {
+  const r = state.routes.find(x => x.id === state.selectedRoute);
+  if (!r) return;
+  // 选中高亮
+  const color = COLORS[r.type] || COLORS.run;
+  el("path", {
+    d: smoothPathD(r.pts, r.type === "block" ? 0 : 0.5),
+    fill: "none", stroke: color,
+    "stroke-width": 6, opacity: .28,
+    "stroke-linecap": "round"
+  }, g);
+  if (state.routeEdit) {
+    r.pts.forEach((pt, i) => {
+      const h = el("circle", {
+        cx: pt.x, cy: pt.y, r: 7,
+        fill: i === 0 ? "#4da3ff" : i === r.pts.length - 1 ? "#ffd24a" : "#ffffff",
+        stroke: "#111", "stroke-width": 2,
+        class: "route-handle", "data-rid": r.id, "data-idx": i
+      }, g);
+    });
+  }
+}
+
+// 折点拖动
+let ptDrag = null;
+
 function startDrag(e, p) {
   e.stopPropagation();
   if (state.tool === "erase") {
@@ -2330,6 +2454,33 @@ function startDrag(e, p) {
 }
 
 $("#board").addEventListener("pointerdown", e => {
+  // 折点手柄拖动
+  const handle = e.target.closest && e.target.closest(".route-handle");
+  if (handle) {
+    const rid = handle.getAttribute("data-rid");
+    const idx = parseInt(handle.getAttribute("data-idx"), 10);
+    const r = state.routes.find(x => String(x.id) === String(rid));
+    if (r && r.pts[idx]) {
+      ptDrag = { rid: r.id, idx, startX: r.pts[idx].x, startY: r.pts[idx].y, moved: false };
+      e.stopPropagation();
+      render();
+      return;
+    }
+  }
+  // 点击路线：选中并弹操作菜单
+  const hit = e.target.closest && e.target.closest(".route-hit");
+  if (hit && !state.drawing && !state.zoneDraft && state.tool === "select") {
+    const rid = hit.getAttribute("data-route");
+    const r = state.routes.find(x => String(x.id) === String(rid));
+    if (r) {
+      state.selectedRoute = r.id;
+      state.selected = null;
+      render(); refreshSelPanel();
+      showRouteMenu(r, e.clientX, e.clientY);
+      e.stopPropagation();
+      return;
+    }
+  }
   // 区域防守：开始拖出矩形
   if (state.zoneDraft) {
     const pt = svgPoint(e);
@@ -2347,11 +2498,23 @@ $("#board").addEventListener("pointerdown", e => {
   }
   if (state.tool === "select") {
     state.selected = null;
+    state.selectedRoute = null; state.routeEdit = false;
     render(); refreshSelPanel();
   }
 });
 
 $("#board").addEventListener("pointermove", e => {
+  // 折点拖动
+  if (ptDrag) {
+    const r = state.routes.find(x => String(x.id) === String(ptDrag.rid));
+    if (r && r.pts[ptDrag.idx]) {
+      const pt = svgPoint(e);
+      r.pts[ptDrag.idx] = { x: pt.x, y: pt.y };
+      ptDrag.moved = true;
+      render();
+    }
+    return;
+  }
   // 区域防守：拖出矩形
   if (state.zoneDraft && state.zoneDraft.dragging) {
     const pt = svgPoint(e);
@@ -2393,6 +2556,16 @@ $("#board").addEventListener("pointermove", e => {
 });
 
 $("#board").addEventListener("pointerup", e => {
+  // 折点拖动结束
+  if (ptDrag) {
+    if (ptDrag.moved) {
+      pushUndo();
+      toast("折点已调整");
+    }
+    ptDrag = null;
+    render();
+    return;
+  }
   // 区域防守：完成
   if (state.zoneDraft && state.zoneDraft.dragging) {
     const z = state.zoneDraft;
@@ -2778,12 +2951,21 @@ document.addEventListener("keydown", e => {
   else if (k === "b") setTool("block");
   else if (k === "x" || k === "delete" || k === "backspace") setTool("erase");
   else if (k === "escape") {
-    if (state.zoneDraft) {
+    if (state.routeEdit) {
+      state.routeEdit = false;
+      $("#status").innerHTML = "折点编辑完成。";
+      render(); toast("折点编辑完成");
+    } else if (state.zoneDraft) {
       state.zoneDraft = null;
       $("#pillTool").textContent = "工具：选择";
       render(); toast("已取消区域绘制");
     } else if (state.drawing) { state.drawing = null; render(); toast("已取消绘制"); }
-    else { state.selected = null; render(); }
+    else {
+      state.selected = null;
+      state.selectedRoute = null;
+      hideRouteMenu();
+      render();
+    }
   }
 });
 
