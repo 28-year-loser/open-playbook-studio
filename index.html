@@ -438,7 +438,8 @@ aside::-webkit-scrollbar-corner,
   </div>
 
   <div class="tool-group" id="sideGroup">
-    <button data-side="off" class="on">进攻</button>
+    <button data-side="all" class="on">全部</button>
+    <button data-side="off">进攻</button>
     <button data-side="def">防守</button>
   </div>
 
@@ -717,6 +718,7 @@ const state = {
   format: 11,
   tool: "select",
   side: "off",
+  view: "all",        // 视角：all(全部) | off(只看进攻) | def(只看防守)
   treeType: "run",   // 标准路线类型：run | pass
   defense: {
     mode: "zone",        // zone | man
@@ -1727,8 +1729,16 @@ function render() {
   const gP = svg.querySelector("#layerPlayers") || el("g", { id: "layerPlayers" }, svg);
   gR.innerHTML = ""; gD.innerHTML = ""; gP.innerHTML = "";
 
-  // 路线
-  state.routes.forEach(r => drawRoute(gR, r));
+  // 路线（按视角过滤：off=只进攻路线，def=只防守路线，all=全部；正在画的草稿始终显示）
+  const view = state.view;
+  const routeSide = r => {
+    if (r.side) return r.side;
+    const pp = state.players.find(x => String(x.id) === String(r.player));
+    return pp ? pp.side : "off";
+  };
+  state.routes.forEach(r => {
+    if (view === "all" || routeSide(r) === view) drawRoute(gR, r);
+  });
   if (state.drawing) drawRoute(gR, state.drawing, true);
 
   // 防守图层：区域范围 + 盯人连线
@@ -1952,6 +1962,8 @@ function drawRoute(g, r, isDraft) {
 function drawDefense(g) {
   const df = state.defense;
   if (!df) return;
+  // 进攻视角：隐藏防守布局（区域防守 + 盯人），专注进攻
+  if (state.view === "off") return;
 
   // 1) 区域防守范围（矩形或圆形）：默认淡化，悬停归属球员时高亮
   (df.zones || []).forEach(z => {
@@ -2912,9 +2924,13 @@ document.querySelectorAll("#toolGroup button").forEach(b =>
 
 document.querySelectorAll("#sideGroup button").forEach(b =>
   b.onclick = () => {
-    state.side = b.dataset.side;
+    state.view = b.dataset.side;                       // all | off | def
+    state.side = (b.dataset.side === "def") ? "def" : "off";  // 默认路线阵营
     document.querySelectorAll("#sideGroup button").forEach(x =>
       x.classList.toggle("on", x === b));
+    render();
+    const nm = { all: "全部视角（进攻 + 防守）", off: "进攻视角（只看进攻路线）", def: "防守视角（只看防守布局）" }[state.view];
+    toast("已切换到" + nm);
   });
 
 $("#selFormat").onchange = e => {
