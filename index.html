@@ -375,15 +375,44 @@ aside::-webkit-scrollbar-corner,
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ===== 响应式 ===== */
+/* ===== 移动端响应式（≤900px）：自然滚动 + 球场置顶 + 面板整齐堆叠 ===== */
 @media(max-width:900px){
-  main{flex-direction:column}
-  aside{width:100%;max-height:172px;border-right:0;border-bottom:1px solid var(--line);
-        display:flex;gap:16px;overflow-x:auto;overflow-y:hidden;padding:11px}
-  aside.right{border-left:0;border-top:1px solid var(--line);max-height:150px}
-  aside .aside-h{margin:0 0 6px;flex-shrink:0}
-  aside .col{min-width:170px;flex-shrink:0}
-  #stage{padding:10px}
+  html,body{height:auto;min-height:100%;overflow:visible}
+  body{overflow-x:hidden}
+
+  /* 顶栏：紧凑、整齐换行、不裁切 */
+  header{padding:8px 10px;gap:7px}
+  .brand{margin-right:2px;min-width:0;flex-shrink:1;overflow:hidden}
+  .brand > div{min-width:0}
+  .brand b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand .logo{width:26px;height:26px;border-radius:7px;flex-shrink:0}
   .brand small{display:none}
+  header button{padding:6px 9px;font-size:12px;border-radius:7px;flex-shrink:0}
+  header .sep{display:none}
+  .spacer{display:none}
+  .tool-group{padding:2px;gap:4px;flex-shrink:0}
+  .tool-group button{padding:5px 8px;font-size:12px}
+
+  /* 主体：纵向自然流（可滚动），球场置顶作视觉主角 */
+  main{flex-direction:column;height:auto;min-height:0;overflow:visible}
+  #stage{order:-1;flex:none;padding:12px 12px 4px;overflow:visible}
+  #board-wrap{max-width:100%;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.38)}
+
+  /* 面板：整宽堆叠、无横向滚动挤压 */
+  aside,aside.right{
+    width:100%;max-height:none;flex:none;
+    border:0;border-top:1px solid var(--line);
+    display:block;overflow:visible;padding:12px 14px
+  }
+  aside .col{min-width:0;width:100%;margin:0 0 4px}
+  aside .col:last-child{margin-bottom:0}
+  aside .aside-h{margin:14px 0 8px}
+  aside .col > .aside-h:first-child{margin-top:2px}
+
+  /* 底栏：紧凑、状态独占一行 */
+  footer{padding:8px 10px;gap:8px}
+  #status{min-width:0;flex-basis:100%;order:2}
+  .pill{order:1}
 }
 </style>
 </head>
