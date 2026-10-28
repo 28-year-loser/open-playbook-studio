@@ -194,7 +194,10 @@ footer{
   flex-shrink:0; width:27px; height:27px; padding:0; border-radius:6px;
   display:grid; place-items:center; font-size:11px; opacity:.45;
 }
+.fitem .fedit.fdel:hover{background:#5a2828;color:#ff8f84;border-color:#7a3a3a}
 .fitem:hover .fedit{opacity:1}
+#rnDel{color:#ff8f84;border-color:#7a3a3a}
+#rnDel:hover{background:#5a2828}
 .fadd{
   width:100%; text-align:left; padding:8px 10px; border-radius:7px;
   font-size:12.5px; color:var(--accent); border:1px dashed #3a5a74;
@@ -656,11 +659,12 @@ aside::-webkit-scrollbar-corner,
 
 <div class="modal-mask" id="renameModal">
   <div class="modal-card">
-    <div class="modal-title">重命名阵型</div>
+    <div class="modal-title">阵型设置</div>
     <div class="modal-sub" id="rnSub">修改该阵型在列表中显示的名称。</div>
     <label>新名称</label>
     <input type="text" id="rnName" maxlength="28">
     <div class="modal-actions">
+      <button id="rnDel">🗑 删除</button>
       <button id="rnCancel">取消</button>
       <button id="rnOk" class="primary">保存名称</button>
     </div>
@@ -1108,6 +1112,7 @@ const PRESETS = {
 const FORM_STORE_KEY = "obs-formations-v1";
 state.custom = { 11: { off: [], def: [] }, 8: { off: [], def: [] }, 5: { off: [], def: [] } };
 state.renames = {};
+state.hiddenForms = {};
 
 function loadFormStore() {
   try {
@@ -1121,12 +1126,13 @@ function loadFormStore() {
             state.custom[f][s] = d.custom[f][s];
     }
     if (d.renames && typeof d.renames === "object") state.renames = d.renames;
+    if (d.hiddenForms && typeof d.hiddenForms === "object") state.hiddenForms = d.hiddenForms;
   } catch (err) { console.warn("载入自定义阵型失败", err); }
 }
 function saveFormStore() {
   try {
     localStorage.setItem(FORM_STORE_KEY, JSON.stringify({
-      custom: state.custom, renames: state.renames
+      custom: state.custom, renames: state.renames, hiddenForms: state.hiddenForms
     }));
   } catch (err) { console.warn("保存自定义阵型失败", err); }
 }
@@ -1136,6 +1142,7 @@ function getFormations(fmt, side) {
   const out = [];
   (FORMATIONS[fmt][side] || []).forEach((f, i) => {
     const key = `b-${fmt}-${side}-${i}`;
+    if (state.hiddenForms && state.hiddenForms[key]) return;   // 已移除的内置阵型
     out.push({ ...f, key, builtin: true, name: state.renames[key] || f.name });
   });
   (state.custom[fmt][side] || []).forEach(f => {
@@ -1177,14 +1184,29 @@ function renameFormation(key, newName) {
   return true;
 }
 function deleteFormation(key) {
+  // 内置阵型：从列表移除（可恢复）
+  if (String(key).startsWith("b-")) {
+    if (!state.hiddenForms) state.hiddenForms = {};
+    state.hiddenForms[key] = true;
+    saveFormStore();
+    return true;
+  }
   for (const f of ["11","8","5"])
     for (const s of ["off","def"]) {
       const arr = state.custom[f][s] || [];
       const i = arr.findIndex(x => x.key === key);
-      if (i >= 0) { arr.splice(i, 1); saveFormStore(); return true; }
+      if (i >= 0) {
+        arr.splice(i, 1);
+        if (state.renames[key]) delete state.renames[key];
+        saveFormStore(); return true;
+      }
     }
   if (state.renames[key]) { delete state.renames[key]; saveFormStore(); return true; }
   return false;
+}
+function restoreHiddenFormations() {
+  state.hiddenForms = {};
+  saveFormStore();
 }
 
 // ============================================================
@@ -1661,7 +1683,19 @@ function renderFormationButtons() {
       ed.textContent = "✎";
       ed.title = "重命名 / 管理";
       ed.onclick = (ev) => { ev.stopPropagation(); openFormManager(form, side); };
-      wrap.appendChild(b); wrap.appendChild(ed);
+      const del = document.createElement("button");
+      del.className = "fedit fdel";
+      del.textContent = "✕";
+      del.title = form.builtin ? "从列表移除（可恢复）" : "删除此阵型";
+      del.onclick = (ev) => {
+        ev.stopPropagation();
+        const kind = form.builtin ? "从列表移除（可在下方恢复）" : "删除";
+        if (!confirm(`确定${kind}阵型「${form.name}」？`)) return;
+        deleteFormation(form.key);
+        renderFormationButtons();
+        toast(form.builtin ? `已移出「${form.name}」（可恢复）` : `已删除「${form.name}」`);
+      };
+      wrap.appendChild(b); wrap.appendChild(ed); wrap.appendChild(del);
       box.appendChild(wrap);
     });
     // 新建按钮
@@ -1670,6 +1704,20 @@ function renderFormationButtons() {
     add.textContent = `＋ 新建${sideLabel}阵型`;
     add.onclick = () => openNewFormDialog(side);
     box.appendChild(add);
+    // 有被移除的内置阵型时提供恢复入口
+    const hasHidden = Object.keys(state.hiddenForms || {})
+      .some(k => k.startsWith(`b-${state.format}-${side}-`));
+    if (hasHidden) {
+      const rst = document.createElement("button");
+      rst.className = "fadd";
+      rst.textContent = "⟲ 恢复已移除的内置阵型";
+      rst.onclick = () => {
+        restoreHiddenFormations();
+        renderFormationButtons();
+        toast("已恢复内置阵型");
+      };
+      box.appendChild(rst);
+    }
   });
 
   $("#pillFormat").textContent = state.format + " 人制";
@@ -2698,6 +2746,15 @@ $("#fmOk").onclick = () => {
 };
 
 $("#rnCancel").onclick = () => RM.classList.remove("show");
+$("#rnDel").onclick = () => {
+  if (!rmTarget) return;
+  const kind = rmTarget.builtin ? "从列表移除（可在列表下方恢复）" : "删除";
+  if (!confirm(`确定${kind}阵型「${rmTarget.name}」？`)) return;
+  deleteFormation(rmTarget.key);
+  RM.classList.remove("show");
+  renderFormationButtons();
+  toast(rmTarget.builtin ? `已移出「${rmTarget.name}」（可恢复）` : `已删除「${rmTarget.name}」`);
+};
 $("#rnOk").onclick = () => {
   const v = $("#rnName").value.trim();
   if (!v) { toast("名称不能为空"); return; }
