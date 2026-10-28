@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Open Playbook Studio · 开源美式橄榄球战术板</title>
+<!-- PWA：可安装为 APP（添加到主屏幕 / 安装应用），支持离线使用 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#10151c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="应天战术板">
 <style>
 :root{
   --bg:#0f1419; --panel:#1a2129; --panel2:#232d38; --line:#2e3a46;
@@ -1280,23 +1289,29 @@ function loadPlayIntoBoard(p) {
 
 // 把当前画布存入战术本（含快照图用于打印）
 function addCurrentPlay() {
+  // 同步捕获当前状态并立即入列：图像渲染是异步的，若在回调里才 push，
+  // 连续保存会因完成顺序不同把新战术插到前面/中间（顺序错乱）
+  const srcSnap = buildExportSVG();   // 画布快照也在点击瞬间冻结
+  const p = {
+    id: "p-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1000),
+    name: $("#playName").value || ("战术 " + (state.plays.length + 1)),
+    code: $("#playCode").value || "",
+    note: $("#playNote").value || "",
+    format: state.format,
+    players: state.players.map(x => ({ ...x, history: [] })),
+    routes: state.routes.map(x => ({ ...x })),
+    tplOff: state.tpl.off, tplDef: state.tpl.def,   // 模板快照（重置战术用）
+    image: null,
+    createdAt: new Date().toISOString()
+  };
+  state.plays.push(p);            // 入列顺序 = 保存顺序
+  savePlays(); renderPlayList();
+  toast(`已存入战术本「${p.name}」（共 ${state.plays.length} 个）`);
+  // 快照图异步补上，不影响顺序
   renderPlayCanvas(c => {
-    const p = {
-      id: "p-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1000),
-      name: $("#playName").value || ("战术 " + (state.plays.length + 1)),
-      code: $("#playCode").value || "",
-      note: $("#playNote").value || "",
-      format: state.format,
-      players: state.players.map(x => ({ ...x, history: [] })),
-      routes: state.routes.map(x => ({ ...x })),
-      tplOff: state.tpl.off, tplDef: state.tpl.def,   // 模板快照（重置战术用）
-      image: c.toDataURL("image/jpeg", 0.82),
-      createdAt: new Date().toISOString()
-    };
-    state.plays.push(p);
-    savePlays(); renderPlayList();
-    toast(`已存入战术本「${p.name}」（共 ${state.plays.length} 个）`);
-  });
+    p.image = c.toDataURL("image/jpeg", 0.82);
+    savePlays();
+  }, null, srcSnap);
 }
 
 // ---------- A4 网格排版 ----------
@@ -3587,8 +3602,8 @@ function buildImagePDF(jpegBytes, imgW, imgH, pageW, pageH) {
   return out;
 }
 
-function renderPlayCanvas(cb, quality) {
-  const src = buildExportSVG();
+function renderPlayCanvas(cb, quality, svgSrc) {
+  const src = svgSrc || buildExportSVG();   // 允许传入点击瞬间冻结的快照
   const img = new Image();
   const blob = new Blob([src], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -3771,6 +3786,14 @@ function boot() {
     "就绪 — <b>拖动</b>球员调整站位；选 <b>R/P/B</b> 画路线（点球员→点折点→双击收尾）";
 }
 boot();
+</script>
+<script>
+// PWA Service Worker：网络优先 + 离线回退（https 环境生效）
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
