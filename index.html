@@ -247,6 +247,9 @@ footer{
 .modal-actions button{flex:1;padding:10px;font-size:13px;border-radius:8px}
 .modal-actions .primary{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:700}
 .modal-actions .primary:hover{background:#63b3ff}
+#nmErr{min-height:18px;margin:6px 0 2px;font-size:12px;color:#ff7b72}
+#nmSide button{flex:1;padding:8px;border-radius:8px;cursor:pointer}
+#nmSide button.on{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:700}
 
 /* ===== 打印预览（A4 Call Sheet 版式） ===== */
 #previewMask{
@@ -448,6 +451,7 @@ aside::-webkit-scrollbar-corner,
   <button id="btnUndo" title="撤销 (Ctrl+Z)">⟲ 撤销</button>
   <button id="btnRedo" title="重做 (Ctrl+Y)">⟳ 重做</button>
   <div class="sep"></div>
+  <button id="btnAddPlayer">＋ 添加球员</button>
   <button id="btnClear">清空路线</button>
   <button id="btnReset" class="warn">重置战术</button>
   <div class="sep"></div>
@@ -619,6 +623,7 @@ aside::-webkit-scrollbar-corner,
   <div class="pm-item" data-act="undo" data-side="both">↩️&nbsp; 撤销此球员移动<span class="k">Ctrl+Z</span></div>
   <div class="pm-item" data-act="undoAll" data-side="both">⟲⟲&nbsp; 退回初始位置</div>
   <div class="pm-sep" data-side="both"></div>
+  <div class="pm-item" data-act="rename" data-side="both">✏️&nbsp; 重命名球员<span class="k">3~10字</span></div>
   <div class="pm-item danger" data-act="del" data-side="both">🗑️&nbsp; 删除此球员</div>
 </div>
 
@@ -672,6 +677,26 @@ aside::-webkit-scrollbar-corner,
       <button id="prCancel">取消</button>
       <button id="prPdf">导出 PDF</button>
       <button id="prOk" class="primary">打印预览</button>
+    </div>
+  </div>
+</div>
+
+<!-- 球员名称对话框：添加 / 重命名（3~10 字符） -->
+<div class="modal-mask" id="nameModal">
+  <div class="modal-card">
+    <div class="modal-title" id="nmTitle">添加球员</div>
+    <div class="modal-sub" id="nmSub">名称限 3~10 个字符。</div>
+    <label for="nmInput">球员名称</label>
+    <input type="text" id="nmInput" maxlength="10" placeholder="3~10 个字符" autocomplete="off">
+    <div id="nmErr"></div>
+    <label id="nmSideLabel">所属一方</label>
+    <div class="row" id="nmSide">
+      <button type="button" data-side="off">进攻</button>
+      <button type="button" data-side="def">防守</button>
+    </div>
+    <div class="modal-actions">
+      <button id="nmCancel">取消</button>
+      <button id="nmOk" class="primary">确定</button>
     </div>
   </div>
 </div>
@@ -1129,18 +1154,13 @@ function newFormation(fmt, side, name, template) {
     pts = template.pts.map(p => [...p]);
     nums = [...template.nums];
   } else {
-    // 空白模板：生成等距占位球员，方便直接拖动布阵
+    // 空白模板：默认不包含任何球员（用「添加球员」自由布阵）
     pts = []; nums = [];
-    for (let i = 0; i < need; i++) {
-      const t = need === 1 ? 0.5 : i / (need - 1);
-      pts.push([0.22 + t * 0.16, 0.18 + t * 0.64]);
-      nums.push(String(i + 1));
-    }
   }
   const form = {
     key: makeFormKey(),
     name: name || "新阵型",
-    note: template ? `基于模板「${template.name}」` : `空白模板（${need} 个占位球员）`,
+    note: template ? `基于模板「${template.name}」` : `空白模板（不含球员，可自由添加）`,
     blank: !template,   // 空白模板标记（重置战术时判定用）
     pts, nums
   };
@@ -1659,7 +1679,8 @@ function validateFormation(form, fmt) {
   const need = parseInt(fmt, 10);
   if (form.pts.length !== form.nums.length)
     return `阵型「${form.name}」坐标数(${form.pts.length})与位置标签数(${form.nums.length})不一致`;
-  if (form.pts.length !== need)
+  // 空白模板不限人数（默认 0 人，球员可自由添加/删除）
+  if (form.pts.length !== need && form.blank !== true)
     return `阵型「${form.name}」有 ${form.pts.length} 人，但 ${need} 人制应为 ${need} 人`;
   return null;
 }
@@ -2415,9 +2436,10 @@ PM.addEventListener("click", e => {
   // 防守菜单：区域防守 → 进入画区域模式
   const zoneBtn = e.target.closest('[data-act="zone"]');
   if (zoneBtn && pmPlayerId !== null) {
+    const pid = pmPlayerId;   // 先捕获：hidePlayerMenu() 会把 pmPlayerId 清空
     hidePlayerMenu();
     setTool("select");   // 归一工具状态，避免残留画线工具劫持后续点击
-    state.zoneDraft = { x: 0, y: 0, w: 0, h: 0, player: pmPlayerId };
+    state.zoneDraft = { x: 0, y: 0, w: 0, h: 0, player: pid };
     $("#status").innerHTML = "<b>区域防守</b> — 在球场上<b>按住拖出</b>一个矩形区域，松手完成。";
     $("#pillTool").textContent = "工具：区域防守";
     toast("拖出区域范围（松手完成，Esc 取消）");
@@ -2427,7 +2449,8 @@ PM.addEventListener("click", e => {
   const zcFree = e.target.closest('[data-act="zoneCircleFree"]');
   const zcFixed = e.target.closest('[data-act="zoneCircleFixed"]');
   if ((zcFree || zcFixed) && pmPlayerId !== null) {
-    const p = state.players.find(x => x.id === pmPlayerId);
+    const pid = pmPlayerId;   // 先捕获：hidePlayerMenu() 会把 pmPlayerId 清空
+    const p = state.players.find(x => x.id === pid);
     hidePlayerMenu();
     if (p) {
       const mode = zcFree ? "free" : "fixed";
@@ -2435,7 +2458,7 @@ PM.addEventListener("click", e => {
       state.zoneDraft = {
         shape: "circle", mode,
         cx: p.x, cy: p.y, rx: 0, ry: 0,
-        player: pmPlayerId
+        player: pid
       };
       $("#status").innerHTML = mode === "free"
         ? "<b>圆形区域（自由调节）</b> — 以球员为圆心，<b>拖动鼠标</b>调节椭圆形状与大小，松手完成。"
@@ -2455,6 +2478,14 @@ PM.addEventListener("click", e => {
       render(); updateStats(); refreshSelPanel();
       toast("已删除盯人防守");
     }
+    return;
+  }
+  // 重命名球员
+  const renBtn = e.target.closest('[data-act="rename"]');
+  if (renBtn && pmPlayerId !== null) {
+    const pid = pmPlayerId;   // 先捕获，hidePlayerMenu 会清空
+    hidePlayerMenu();
+    openNameDialog("rename", pid);
     return;
   }
   // 标准路线子项：直接生成路线
@@ -2592,17 +2623,12 @@ function renderTemplateList() {
 
   // 空白模板（占位球员预览）
   const blankForm = { pts: [] };
-  const need = parseInt(state.format, 10);
-  for (let i = 0; i < need; i++) {
-    const t = need === 1 ? 0.5 : i / (need - 1);
-    blankForm.pts.push([0.22 + t * 0.16, 0.18 + t * 0.64]);
-  }
   const blank = document.createElement("div");
   blank.className = "tpl-item on";
   blank.innerHTML =
     `<input type="radio" name="tpl" checked>` +
     `<div class="tmain"><div class="tname">空白模板</div>` +
-    `<div class="tnote">生成 ${need} 个占位球员，创建后直接拖动布阵。</div>` +
+    `<div class="tnote">默认不包含任何球员，用「添加球员」自由布阵。</div>` +
     buildFormationPreview(blankForm, fmSide) + `</div>` +
     `<span class="tbadge blank">空白</span>`;
   blank.onclick = () => pickTpl(box, blank, null);
@@ -3314,6 +3340,77 @@ $("#btnDelPlayer").onclick = () => {
   render(); updateStats(); refreshSelPanel();
   toast(`已删除球员 ${p.num}`);
 };
+
+// ---------- 球员名称对话框：添加 / 重命名（3~10 字符校验） ----------
+let nmMode = "add", nmPlayerId = null, nmSide = "off";
+function openNameDialog(mode, pid) {
+  nmMode = mode;
+  nmPlayerId = (pid == null ? null : pid);
+  $("#nmTitle").textContent = mode === "rename" ? "重命名球员" : "添加球员";
+  $("#nmSub").textContent = "名称限 3~10 个字符。";
+  $("#nmErr").textContent = "";
+  const p = mode === "rename" ? state.players.find(x => x.id === pid) : null;
+  $("#nmInput").value = p ? String(p.num) : "";
+  const showSide = (mode !== "rename");
+  $("#nmSide").style.display = showSide ? "" : "none";
+  $("#nmSideLabel").style.display = showSide ? "" : "none";
+  if (showSide) {
+    nmSide = state.view === "def" ? "def" : "off";
+    $("#nmSide").querySelectorAll("button").forEach(b =>
+      b.classList.toggle("on", b.dataset.side === nmSide));
+  }
+  $("#nameModal").classList.add("show");
+  setTimeout(() => { $("#nmInput").focus(); $("#nmInput").select(); }, 30);
+}
+function nmValidate(v) {
+  const s = String(v || "").trim();
+  const len = [...s].length;
+  if (len < 3) return "名称至少 3 个字符";
+  if (len > 10) return "名称最多 10 个字符";
+  return null;
+}
+function nmSubmit() {
+  const s = $("#nmInput").value.trim();
+  const err = nmValidate(s);
+  if (err) { $("#nmErr").textContent = err; return; }
+  if (nmMode === "rename") {
+    const p = state.players.find(x => x.id === nmPlayerId);
+    $("#nameModal").classList.remove("show");
+    if (!p) return;
+    pushUndo();
+    p.num = s;
+    render(); updateStats(); refreshSelPanel();
+    toast(`已重命名为「${s}」`);
+  } else {
+    pushUndo();
+    const x = nmSide === "def"
+      ? FIELD.x + FIELD.w * 0.52
+      : FIELD.x + FIELD.w * 0.36;
+    state.players.push({
+      id: state.nextId++, side: nmSide, num: s,
+      x, y: FIELD.y + FIELD.h * 0.5, history: []
+    });
+    $("#nameModal").classList.remove("show");
+    render(); updateStats(); refreshSelPanel();
+    toast(`已添加${nmSide === "def" ? "防守" : "进攻"}球员「${s}」`);
+  }
+}
+$("#btnAddPlayer").onclick = () => openNameDialog("add", null);
+$("#nmCancel").onclick = () => $("#nameModal").classList.remove("show");
+$("#nmOk").onclick = nmSubmit;
+$("#nmInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); nmSubmit(); }
+});
+$("#nmInput").addEventListener("input", () => { $("#nmErr").textContent = ""; });
+$("#nmSide").querySelectorAll("button").forEach(b =>
+  b.onclick = () => {
+    nmSide = b.dataset.side;
+    $("#nmSide").querySelectorAll("button").forEach(x =>
+      x.classList.toggle("on", x === b));
+  });
+$("#nameModal").addEventListener("pointerdown", e => {
+  if (e.target === $("#nameModal")) $("#nameModal").classList.remove("show");
+});
 
 $("#btnMirror").onclick = () => {
   pushUndo();
