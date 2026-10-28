@@ -731,6 +731,7 @@ const state = {
   selected: null,
   hoverPlayer: null,     // 悬停的球员 id（用于按需显示盯人连线）
   selectedRoute: null,   // 选中的路线 id
+  tpl: { off: null, def: null },   // 当前套用的模板阵型快照（重置时恢复用）
   routeEdit: false,      // 折点编辑模式
   drawing: null,    // 正在绘制的路线
   nextId: 1
@@ -755,7 +756,8 @@ const toast = (msg) => {
 };
 const snapshot = () => JSON.stringify({
   players: state.players, routes: state.routes,
-  format: state.format, nextId: state.nextId
+  format: state.format, nextId: state.nextId,
+  tpl: state.tpl
 });
 function pushUndo() {
   undoStack.push(snapshot());
@@ -767,6 +769,7 @@ function applySnap(s) {
   const d = JSON.parse(s);
   state.players = d.players; state.routes = d.routes;
   state.format = d.format; state.nextId = d.nextId;
+  state.tpl = d.tpl || { off: null, def: null };
   state.selected = null; state.drawing = null;
   $("#selFormat").value = String(state.format);
   render(); updateStats();
@@ -1173,6 +1176,7 @@ function newFormation(fmt, side, name, template) {
     key: makeFormKey(),
     name: name || "新阵型",
     note: template ? `基于模板「${template.name}」` : `空白模板（${need} 个占位球员）`,
+    blank: !template,   // 空白模板标记（重置战术时判定用）
     pts, nums
   };
   if (!state.custom[fmt]) state.custom[fmt] = { off: [], def: [] };
@@ -1256,6 +1260,7 @@ function loadPlayIntoBoard(p) {
   state.players = (p.players || []).map(x => ({ ...x, history: [] }));
   state.routes = (p.routes || []).map(x => ({ ...x }));
   state.format = p.format || 11;
+  state.tpl = { off: p.tplOff || null, def: p.tplDef || null };  // 恢复模板快照
   $("#selFormat").value = String(state.format);
   $("#playName").value = p.name || "";
   $("#playCode").value = p.code || "";
@@ -1277,6 +1282,7 @@ function addCurrentPlay() {
       format: state.format,
       players: state.players.map(x => ({ ...x, history: [] })),
       routes: state.routes.map(x => ({ ...x })),
+      tplOff: state.tpl.off, tplDef: state.tpl.def,   // 模板快照（重置战术用）
       image: c.toDataURL("image/jpeg", 0.82),
       createdAt: new Date().toISOString()
     };
@@ -1693,6 +1699,56 @@ function validateFormation(form, fmt) {
   return null;
 }
 
+// 空白模板判定：带 blank 标记，或位置标签全是数字占位（"1","2",…）
+function isBlankForm(form) {
+  if (!form) return true;
+  if (form.blank === true) return true;
+  const nums = form.nums || [];
+  return nums.length > 0 && nums.every(n => /^\d+$/.test(String(n)));
+}
+
+// ---------- 位置标签严格化（NFL 口径） ----------
+// 重复位置自动编号：WR→WR1/WR2/WR3（按场地 y 从小到大，即图示从上到下）
+// 两个安全卫 → SS（Strong Safety，强侧/TE 侧）+ FS（Free Safety，自由）
+// 别名：NG（Nose Guard）→ NT（Nose Tackle，NFL 标准名）
+function nflizeNums(nums, pts) {
+  const ALIAS = { NG: "NT" };
+  const isDigits = s => /^\d+$/.test(s);
+  const bases = nums.map(n => {
+    const s = String(n);
+    if (isDigits(s)) return s;
+    const b = s.replace(/\d+$/, "");
+    return ALIAS[b] || b || s;
+  });
+
+  // 按基础标签分组
+  const groups = {};
+  bases.forEach((b, i) => { (groups[b] = groups[b] || []).push(i); });
+
+  // 组内排序：按 pts 的 y 升序（图示从上到下），无坐标则按出现顺序
+  const rank = {};   // rank[i] = 组内序号（1 起）
+  Object.keys(groups).forEach(b => {
+    const idxs = groups[b].slice().sort((a, c) => {
+      const ya = pts && pts[a] ? pts[a][1] : a;
+      const yc = pts && pts[c] ? pts[c][1] : c;
+      return ya !== yc ? ya - yc : a - c;
+    });
+    idxs.forEach((idx, k) => rank[idx] = k + 1);
+  });
+
+  return bases.map((b, i) => {
+    if (isDigits(b)) return b;
+    const c = groups[b].length;
+    if (c === 1) return b;
+    const n = rank[i];
+    if (b === "S") {
+      if (c === 2) return n === 1 ? "SS" : "FS";
+      return "S" + n;
+    }
+    return b + n;
+  });
+}
+
 function applyFormation(form, side, skipUndo) {
   const err = validateFormation(form, state.format);
   if (err) {
@@ -1701,15 +1757,23 @@ function applyFormation(form, side, skipUndo) {
     return;
   }
   if (!skipUndo) pushUndo();
+  // 记录当前套用的模板快照（重置战术时按此恢复）
+  state.tpl[side] = {
+    name: form.name || "",
+    blank: isBlankForm(form),
+    pts: (form.pts || []).map(p => [p[0], p[1]]),
+    nums: (form.nums || []).map(n => String(n))
+  };
   // 只替换该侧球员
   state.players = state.players.filter(p => p.side !== side);
   state.routes = state.routes.filter(r => r.side !== side);
 
+  const labels = nflizeNums(form.nums, form.pts);
   form.pts.forEach((pt, i) => {
     state.players.push({
       id: state.nextId++,
       side,
-      num: form.nums[i] || String(i + 1),
+      num: labels[i] || String(i + 1),
       x: FIELD.x + pt[0] * FIELD.w,
       y: FIELD.y + pt[1] * FIELD.h
     });
@@ -1767,12 +1831,13 @@ function render() {
       fill, stroke, "stroke-width": 2.2
     }, g);
 
+    const numStr = String(p.num);
     const t = el("text", {
       x: p.x, y: p.y + 4.2,
-      "text-anchor": "middle", "font-size": 10.5,
+      "text-anchor": "middle", "font-size": numStr.length >= 4 ? 8 : numStr.length === 3 ? 9.5 : 10.5,
       fill: isOff ? COLORS.offText : COLORS.defText
     }, g);
-    t.textContent = p.num;
+    t.textContent = numStr;
 
     // 拖动
     g.addEventListener("pointerdown", e => startDrag(e, p));
@@ -3008,14 +3073,49 @@ $("#btnClear").onclick = () => {
   toast("已清空路线与防守标记（区域/盯人）");
 };
 
+// 重置战术：按「当前套用的模板阵型」恢复预设配置（而非全部清空）
+// - 触发：顶栏「重置战术」按钮 → 确认弹窗
+// - 模板来源：applyFormation 套用时记录的 state.tpl.off / state.tpl.def
+// - 空白模板（或无模板记录）→ 该侧完全清空；真实模板 → 该侧球员恢复预设站位
+// - 路线 / 区域 / 盯人属绘制内容，两种情况都清空；战术名称/口令/笔记保留
 $("#btnReset").onclick = () => {
-  if (!confirm("确定要重置整个战术吗？球员、路线和防守标记都会清空。")) return;
+  const tOff = (state.tpl && state.tpl.off) || null;
+  const tDef = (state.tpl && state.tpl.def) || null;
+  const bOff = isBlankForm(tOff), bDef = isBlankForm(tDef);
+  const bothBlank = bOff && bDef;
+
+  const msg = bothBlank
+    ? "确定要重置战术吗？当前为空白模板——球员、路线和防守标记将完全清空。"
+    : "确定要重置战术吗？球员将恢复为模板预设站位，路线和防守标记将清空。";
+  if (!confirm(msg)) return;
+
   pushUndo();
-  state.players = []; state.routes = []; state.selected = null; state.drawing = null;
-  state.defense.zones = []; state.defense.manAssign = {};   // 防守标记一并清除
-  state.selectedRoute = null; state.routeEdit = false;
-  render(); updateStats();
-  toast("已重置");
+  // 两种情况共通：清空绘制内容（路线 + 区域防守 + 盯人关系）
+  state.routes = []; state.drawing = null;
+  state.defense.zones = []; state.defense.manAssign = {};
+  state.selected = null; state.selectedRoute = null; state.routeEdit = false;
+
+  if (bothBlank) {
+    state.players = [];   // 空白模板 → 完全清空
+  } else {
+    // 按侧恢复：真实模板侧恢复预设站位，空白模板侧清空球员
+    [["off", tOff, bOff], ["def", tDef, bDef]].forEach(([side, tpl, blank]) => {
+      state.players = state.players.filter(p => p.side !== side);
+      if (blank || !tpl) return;
+      const labels = nflizeNums(tpl.nums, tpl.pts);
+      tpl.pts.forEach((pt, i) => {
+        state.players.push({
+          id: state.nextId++,
+          side,
+          num: labels[i] || String(i + 1),
+          x: FIELD.x + pt[0] * FIELD.w,
+          y: FIELD.y + pt[1] * FIELD.h
+        });
+      });
+    });
+  }
+  render(); updateStats(); refreshSelPanel();
+  toast(bothBlank ? "已重置（空白模板 → 完全清空）" : "已重置为模板预设站位");
 };
 
 // ---------- 选中对象：单独撤销 / 删除 ----------
@@ -3195,6 +3295,7 @@ $("#btnSave").onclick = () => {
     format: state.format,
     players: state.players,
     routes: state.routes,
+    tplOff: state.tpl.off, tplDef: state.tpl.def,
     nextId: state.nextId,
     savedAt: new Date().toISOString()
   };
@@ -3223,6 +3324,7 @@ $("#btnLoad").onclick = () => {
         state.routes = d.routes || [];
         state.format = d.format || 11;
         state.nextId = d.nextId || (Date.now() % 100000);
+        state.tpl = { off: d.tplOff || null, def: d.tplDef || null };  // 恢复模板快照
         $("#playName").value = d.name || "载入战术";
         $("#playCode").value = d.code || "";
         $("#playNote").value = d.note || "";
