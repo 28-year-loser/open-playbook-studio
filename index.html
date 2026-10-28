@@ -626,7 +626,7 @@ aside::-webkit-scrollbar-corner,
   <div class="pm-item" data-act="undo" data-side="both">↩️&nbsp; 撤销此球员移动<span class="k">Ctrl+Z</span></div>
   <div class="pm-item" data-act="undoAll" data-side="both">⟲⟲&nbsp; 退回初始位置</div>
   <div class="pm-sep" data-side="both"></div>
-  <div class="pm-item" data-act="rename" data-side="both">✏️&nbsp; 重命名球员<span class="k">3~10字</span></div>
+  <div class="pm-item" data-act="rename" data-side="both">✏️&nbsp; 重命名球员<span class="k">1~10字</span></div>
   <div class="pm-item danger" data-act="del" data-side="both">🗑️&nbsp; 删除此球员</div>
 </div>
 
@@ -685,13 +685,13 @@ aside::-webkit-scrollbar-corner,
   </div>
 </div>
 
-<!-- 球员名称对话框：添加 / 重命名（3~10 字符） -->
+<!-- 球员名称对话框：添加 / 重命名（1~10 字符） -->
 <div class="modal-mask" id="nameModal">
   <div class="modal-card">
     <div class="modal-title" id="nmTitle">添加球员</div>
-    <div class="modal-sub" id="nmSub">名称限 3~10 个字符。</div>
+    <div class="modal-sub" id="nmSub">名称限 1~10 个字符。</div>
     <label for="nmInput">球员名称</label>
-    <input type="text" id="nmInput" maxlength="10" placeholder="3~10 个字符" autocomplete="off">
+    <input type="text" id="nmInput" maxlength="10" placeholder="1~10 个字符" autocomplete="off">
     <div id="nmErr"></div>
     <label id="nmSideLabel">所属一方</label>
     <div class="row" id="nmSide">
@@ -3398,13 +3398,13 @@ $("#btnDelPlayer").onclick = () => {
   toast(`已删除球员 ${p.num}`);
 };
 
-// ---------- 球员名称对话框：添加 / 重命名（3~10 字符校验） ----------
+// ---------- 球员名称对话框：添加 / 重命名（1~10 字符校验） ----------
 let nmMode = "add", nmPlayerId = null, nmSide = "off";
 function openNameDialog(mode, pid) {
   nmMode = mode;
   nmPlayerId = (pid == null ? null : pid);
   $("#nmTitle").textContent = mode === "rename" ? "重命名球员" : "添加球员";
-  $("#nmSub").textContent = "名称限 3~10 个字符。";
+  $("#nmSub").textContent = "名称限 1~10 个字符。";
   $("#nmErr").textContent = "";
   const p = mode === "rename" ? state.players.find(x => x.id === pid) : null;
   $("#nmInput").value = p ? String(p.num) : "";
@@ -3422,7 +3422,7 @@ function openNameDialog(mode, pid) {
 function nmValidate(v) {
   const s = String(v || "").trim();
   const len = [...s].length;
-  if (len < 3) return "名称至少 3 个字符";
+  if (len < 1) return "名称不能为空";
   if (len > 10) return "名称最多 10 个字符";
   return null;
 }
