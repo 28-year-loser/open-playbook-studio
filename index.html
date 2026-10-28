@@ -1812,6 +1812,7 @@ function render() {
       pushUndo();
       state.players = state.players.filter(x => x.id !== p.id);
       state.routes = state.routes.filter(r => r.player !== p.id);
+      cleanupPlayerDefense(p.id);
       render(); updateStats(); toast("已删除球员");
     });
 
@@ -1990,7 +1991,46 @@ function drawRoute(g, r, isDraft) {
 //  交互：拖动球员 / 画路线
 // ============================================================
 // ---------- 防守图层：区域范围 + 盯人连线 ----------
+// Zone 与球员绑定同步（每次渲染强制生效）：
+// 1) 孤儿 Zone（绑定球员已不存在）重新绑到最近的防守球员，防止脱节漂浮
+// 2) 固定正圆：圆心始终=绑定球员位置、保持正圆（rx=ry）、尺寸固定
+function syncZonesToPlayers() {
+  const zs = (state.defense && state.defense.zones) || [];
+  if (!zs.length) return;
+  zs.forEach(z => {
+    let p = z.player != null
+      ? state.players.find(x => String(x.id) === String(z.player)) : null;
+    if (!p) {
+      const cx = z.shape === "circle" ? z.cx : z.x + z.w / 2;
+      const cy = z.shape === "circle" ? z.cy : z.y + z.h / 2;
+      let best = null, bd = Infinity;
+      state.players.forEach(q => {
+        if (q.side !== "def") return;
+        const d = Math.hypot(q.x - cx, q.y - cy);
+        if (d < bd) { bd = d; best = q; }
+      });
+      if (best) { z.player = best.id; p = best; }
+    }
+    if (p && z.shape === "circle" && z.mode === "fixed") {
+      const r = Math.max(z.rx, z.ry) || 40;
+      z.cx = p.x; z.cy = p.y;
+      z.rx = r; z.ry = r;
+    }
+  });
+}
+
+// 删除球员时清理其区域防守/盯人关系，避免孤儿 Zone 漂浮
+function cleanupPlayerDefense(id) {
+  state.defense.zones = (state.defense.zones || [])
+    .filter(z => String(z.player) !== String(id));
+  const ma = state.defense.manAssign || {};
+  Object.keys(ma).forEach(k => {
+    if (String(k) === String(id) || String(ma[k]) === String(id)) delete ma[k];
+  });
+}
+
 function drawDefense(g) {
+  syncZonesToPlayers();
   const df = state.defense;
   if (!df) return;
   // 进攻视角：隐藏防守布局（区域防守 + 盯人），专注进攻
@@ -2179,6 +2219,9 @@ function refreshSelPanel() {
 function updateZoneCircleRadius(pt) {
   const z = state.zoneDraft;
   if (!z || z.shape !== "circle") return;
+  // 圆心始终=绑定球员的当前位置（防止菜单打开后球员移动导致圆心偏移）
+  const p = z.player != null ? state.players.find(x => String(x.id) === String(z.player)) : null;
+  if (p) { z.cx = p.x; z.cy = p.y; }
   if (z.mode === "fixed") {
     const r = Math.hypot(pt.x - z.cx, pt.y - z.cy);
     z.rx = r; z.ry = r;
@@ -2329,6 +2372,7 @@ PM.addEventListener("click", e => {
   const zoneBtn = e.target.closest('[data-act="zone"]');
   if (zoneBtn && pmPlayerId !== null) {
     hidePlayerMenu();
+    setTool("select");   // 归一工具状态，避免残留画线工具劫持后续点击
     state.zoneDraft = { x: 0, y: 0, w: 0, h: 0, player: pmPlayerId };
     $("#status").innerHTML = "<b>区域防守</b> — 在球场上<b>按住拖出</b>一个矩形区域，松手完成。";
     $("#pillTool").textContent = "工具：区域防守";
@@ -2343,6 +2387,7 @@ PM.addEventListener("click", e => {
     hidePlayerMenu();
     if (p) {
       const mode = zcFree ? "free" : "fixed";
+      setTool("select");
       state.zoneDraft = {
         shape: "circle", mode,
         cx: p.x, cy: p.y, rx: 0, ry: 0,
@@ -2432,6 +2477,7 @@ PM.addEventListener("click", e => {
     pushUndo();
     state.players = state.players.filter(x => x.id !== p.id);
     state.routes = state.routes.filter(r => r.player !== p.id);
+    cleanupPlayerDefense(p.id);
     state.selected = null;
     render(); updateStats(); refreshSelPanel();
     toast(`已删除球员 ${p.num}`);
@@ -2700,12 +2746,15 @@ let ptDrag = null;
 let zDrag = null;
 
 function startDrag(e, p) {
+  // 区域绘制/路线绘制进行中：不劫持球员点击（冒泡给画布处理画区域/加折点）
+  if (state.zoneDraft || state.drawing) return;
   if (e.button === 2) return; // 右键不开启拖拽/画线，冒泡给 contextmenu 收尾路线
   e.stopPropagation();
   if (state.tool === "erase") {
     pushUndo();
     state.players = state.players.filter(x => x.id !== p.id);
     state.routes = state.routes.filter(r => r.player !== p.id);
+    cleanupPlayerDefense(p.id);
     render(); updateStats(); refreshSelPanel();
     toast("已删除球员");
     return;
@@ -2934,7 +2983,7 @@ $("#board").addEventListener("pointerup", e => {
       }
     }
     state.zoneDraft = null;
-    $("#pillTool").textContent = "工具：选择";
+    setTool("select");
     render(); updateStats();
     return;
   }
@@ -2981,12 +3030,14 @@ function finalizeDrawing() {
       state.routes.push(dr);
       const n = dr.pts.length;
       state.drawing = null;
+      setTool("select");   // 完成后回到“选择”，点球员才能弹出菜单
       render(); updateStats();
       toast("路线已添加（" + n + " 个折点）");
       return true;
     }
   }
   state.drawing = null;
+  setTool("select");
   render();
   return false;
 }
@@ -3148,6 +3199,7 @@ $("#btnDelPlayer").onclick = () => {
   pushUndo();
   state.players = state.players.filter(x => x.id !== p.id);
   state.routes = state.routes.filter(r => r.player !== p.id);
+  cleanupPlayerDefense(p.id);
   state.selected = null;
   render(); updateStats(); refreshSelPanel();
   toast(`已删除球员 ${p.num}`);
@@ -3392,9 +3444,9 @@ document.addEventListener("keydown", e => {
       render(); toast("折点编辑完成");
     } else if (state.zoneDraft) {
       state.zoneDraft = null;
-      $("#pillTool").textContent = "工具：选择";
+      setTool("select");
       render(); toast("已取消区域绘制");
-    } else if (state.drawing) { state.drawing = null; render(); toast("已取消绘制"); }
+    } else if (state.drawing) { state.drawing = null; setTool("select"); render(); toast("已取消绘制"); }
     else {
       state.selected = null;
       state.selectedRoute = null;
