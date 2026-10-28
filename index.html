@@ -115,7 +115,6 @@ kbd{
 }
 .zone-cov .zone-label{fill:#7fa8c8; opacity:.55; transition:opacity .16s ease, fill .16s ease}
 .zone-cov.hot .zone-label{fill:#eaf6ff; opacity:1}
-.zone-cov.zone-draggable .zone-shape,.zone-cov.zone-draggable .zone-label{cursor:move}
 
 /* ===== 底栏 ===== */
 footer{
@@ -1992,12 +1991,27 @@ function drawRoute(g, r, isDraft) {
 // ============================================================
 // ---------- 防守图层：区域范围 + 盯人连线 ----------
 // Zone 与球员绑定同步（每次渲染强制生效）：
-// 1) 孤儿 Zone（绑定球员已不存在）重新绑到最近的防守球员，防止脱节漂浮
+// 0) 一人一区：同一球员多个区域时只保留最新
+// 1) 孤儿 Zone（绑定球员已不存在）重绑到最近的、尚未负责区域的防守球员
 // 2) 固定正圆：圆心始终=绑定球员位置、保持正圆（rx=ry）、尺寸固定
 function syncZonesToPlayers() {
-  const zs = (state.defense && state.defense.zones) || [];
-  if (!zs.length) return;
-  zs.forEach(z => {
+  const df0 = state.defense;
+  if (!df0 || !df0.zones || !df0.zones.length) return;
+  // 一人一区：保留每个球员最新的区域（数组末尾=最后创建）
+  const byP = {};
+  df0.zones.forEach(z => {
+    if (z.player == null) return;
+    const k = String(z.player);
+    (byP[k] = byP[k] || []).push(z);
+  });
+  Object.keys(byP).forEach(k => {
+    const arr = byP[k];
+    if (arr.length > 1) {
+      const keep = arr[arr.length - 1];
+      df0.zones = df0.zones.filter(z => z === keep || String(z.player) !== k);
+    }
+  });
+  df0.zones.forEach(z => {
     let p = z.player != null
       ? state.players.find(x => String(x.id) === String(z.player)) : null;
     if (!p) {
@@ -2006,6 +2020,9 @@ function syncZonesToPlayers() {
       let best = null, bd = Infinity;
       state.players.forEach(q => {
         if (q.side !== "def") return;
+        // 一人一区：优先绑定到尚未负责区域的防守球员
+        const owns = df0.zones.some(x => x !== z && String(x.player) === String(q.id));
+        if (owns) return;
         const d = Math.hypot(q.x - cx, q.y - cy);
         if (d < bd) { bd = d; best = q; }
       });
@@ -2017,6 +2034,33 @@ function syncZonesToPlayers() {
       z.rx = r; z.ry = r;
     }
   });
+}
+
+// 区域命中判断：返回 "resize"（边缘带/固定正圆整体）| "move"（内部，仅矩形/自由椭圆）| null
+function zoneDragMode(z, pt) {
+  if (z.shape === "circle" && z.mode === "fixed") return "resize"; // 固定正圆：拖动=直接调大小
+  if (z.shape === "circle") {
+    const q = Math.hypot((pt.x - z.cx) / (z.rx || 1), (pt.y - z.cy) / (z.ry || 1));
+    const band = Math.abs(q - 1) * Math.min(z.rx, z.ry);
+    return (band < 12 || q > 1) ? "resize" : "move";
+  }
+  const B = 12;
+  const l = pt.x - z.x, r = z.x + z.w - pt.x, t = pt.y - z.y, b = z.y + z.h - pt.y;
+  if (l < -B || r < -B || t < -B || b < -B) return null;
+  return (l < B || r < B || t < B || b < B) ? "resize" : "move";
+}
+
+// 调大小时的方向光标
+function zoneResizeCursor(z, pt) {
+  if (z.shape === "circle") {
+    if (z.mode === "fixed") return "pointer"; // 整体拖动调半径
+    return ((pt.x - z.cx) * (pt.y - z.cy) >= 0) ? "nwse-resize" : "nesw-resize";
+  }
+  const B = 12;
+  const l = pt.x - z.x < B, r = z.x + z.w - pt.x < B, t = pt.y - z.y < B, b = z.y + z.h - pt.y < B;
+  if ((l && t) || (r && b)) return "nwse-resize";
+  if ((l && b) || (r && t)) return "nesw-resize";
+  return (l || r) ? "ew-resize" : "ns-resize";
 }
 
 // 删除球员时清理其区域防守/盯人关系，避免孤儿 Zone 漂浮
@@ -2846,19 +2890,38 @@ $("#board").addEventListener("pointerdown", e => {
     render();
     return;
   }
-  // 已划定区域（矩形/自由椭圆）拖动调位；固定正圆圆心锁定球员，不接受手动拖动
+  // 已划定区域：点按直接控制——边缘拖动调大小，内部拖动移动（固定正圆整体拖动=调半径）
   const zhit = e.target.closest && e.target.closest(".zone-cov");
   if (zhit && !state.drawing && !state.zoneDraft && state.tool === "select") {
     const zid = zhit.getAttribute("data-zone");
     const z = (state.defense.zones || []).find(x => String(x.id) === String(zid));
-    if (z && !(z.shape === "circle" && z.mode === "fixed")) {
+    if (z) {
       const pt = svgPoint(e);
-      const zx = z.shape === "circle" ? z.cx : z.x;
-      const zy = z.shape === "circle" ? z.cy : z.y;
-      zDrag = { id: z.id, ox: pt.x - zx, oy: pt.y - zy, moved: false };
-      e.stopPropagation();
-      render();
-      return;
+      const mode = zoneDragMode(z, pt);
+      if (mode === "resize") {
+        const edges = {};
+        if (z.shape === "circle") {
+          // 自由椭圆：记录起手边缘的主轴，拖动只控制该轴
+          if (z.mode !== "fixed")
+            edges.ax = (Math.abs(pt.x - z.cx) / (z.rx || 1)) >= (Math.abs(pt.y - z.cy) / (z.ry || 1)) ? "x" : "y";
+        } else {
+          edges.l = pt.x - z.x < 12;
+          edges.r = z.x + z.w - pt.x < 12;
+          edges.t = pt.y - z.y < 12;
+          edges.b = z.y + z.h - pt.y < 12;
+        }
+        zDrag = { id: z.id, mode: "resize", edges, moved: false };
+      } else if (mode === "move") {
+        const zx = z.shape === "circle" ? z.cx : z.x;
+        const zy = z.shape === "circle" ? z.cy : z.y;
+        zDrag = { id: z.id, mode: "move", ox: pt.x - zx, oy: pt.y - zy, moved: false };
+      }
+      if (zDrag) {
+        $("#board").style.cursor = (mode === "resize") ? zoneResizeCursor(z, pt) : "move";
+        e.stopPropagation();
+        render();
+        return;
+      }
     }
   }
   if (state.tool === "select") {
@@ -2892,13 +2955,36 @@ $("#board").addEventListener("pointermove", e => {
     render();
     return;
   }
-  // 已划定区域拖动调位
+  // 已划定区域拖动：移动或直接控制大小
   if (zDrag) {
     const z = (state.defense.zones || []).find(x => x.id === zDrag.id);
     if (z) {
       const pt = svgPoint(e);
-      if (z.shape === "circle") { z.cx = pt.x - zDrag.ox; z.cy = pt.y - zDrag.oy; }
-      else { z.x = pt.x - zDrag.ox; z.y = pt.y - zDrag.oy; }
+      if (zDrag.mode === "resize") {
+        if (z.shape === "circle") {
+          const p = z.player != null ? state.players.find(x => String(x.id) === String(z.player)) : null;
+          if (z.mode === "fixed") {
+            const cx = p ? p.x : z.cx, cy = p ? p.y : z.cy;
+            const r = Math.max(10, Math.hypot(pt.x - cx, pt.y - cy));
+            z.cx = cx; z.cy = cy; z.rx = r; z.ry = r;
+          } else {
+            // 自由椭圆：边缘拖动只调对应轴（横向调 rx，纵向调 ry）
+            const e2 = zDrag.edges || {};
+            if (e2.ax === "y") z.ry = Math.max(10, Math.abs(pt.y - z.cy));
+            else z.rx = Math.max(10, Math.abs(pt.x - z.cx));
+          }
+        } else {
+          const e2 = zDrag.edges || {};
+          const right = z.x + z.w, bottom = z.y + z.h;
+          if (e2.l) { z.x = Math.min(pt.x, right - 20); z.w = right - z.x; }
+          if (e2.r) { z.w = Math.max(20, pt.x - z.x); }
+          if (e2.t) { z.y = Math.min(pt.y, bottom - 16); z.h = bottom - z.y; }
+          if (e2.b) { z.h = Math.max(16, pt.y - z.y); }
+        }
+      } else {
+        if (z.shape === "circle") { z.cx = pt.x - zDrag.ox; z.cy = pt.y - zDrag.oy; }
+        else { z.x = pt.x - zDrag.ox; z.y = pt.y - zDrag.oy; }
+      }
       zDrag.moved = true;
       render();
     }
@@ -2934,6 +3020,19 @@ $("#board").addEventListener("pointermove", e => {
     render();
     return;
   }
+  // 悬停在已划定区域上：显示操作光标（边缘=调大小，内部=移动）
+  if (state.tool === "select" && !state.zoneDraft && !state.drawing) {
+    const zh = e.target.closest && e.target.closest(".zone-cov");
+    const svg = $("#board");
+    if (zh) {
+      const z = (state.defense.zones || []).find(x => String(x.id) === String(zh.getAttribute("data-zone")));
+      if (z) {
+        const pt = svgPoint(e);
+        const mode = zoneDragMode(z, pt);
+        svg.style.cursor = (mode === "resize") ? zoneResizeCursor(z, pt) : (mode === "move" ? "move" : "");
+      }
+    } else svg.style.cursor = "";
+  }
   if (state.drawing && state.drawing.pts.length) {
     const pt = svgPoint(e);
     // 实时预览：预览点跟随指针（不并入已定折点）
@@ -2959,6 +3058,9 @@ $("#board").addEventListener("pointerup", e => {
     if (z.shape === "circle") {
       if (z.rx > 10 && z.ry > 10) {
         pushUndo();
+        // 一人一区：新建替换该球员原有区域
+        const had = z.player != null && state.defense.zones.some(x => String(x.player) === String(z.player));
+        if (z.player != null) state.defense.zones = state.defense.zones.filter(x => String(x.player) !== String(z.player));
         state.defense.zones.push({
           id: "z-" + Date.now().toString(36),
           shape: "circle", mode: z.mode,
@@ -2966,20 +3068,27 @@ $("#board").addEventListener("pointerup", e => {
           label: "Zone " + (state.defense.zones.length + 1),
           player: z.player
         });
-        toast(`已添加圆形区域防守（共 ${state.defense.zones.length} 个）`);
+        toast(had
+          ? `已替换该球员的原区域（一人一区，共 ${state.defense.zones.length} 个）`
+          : `已添加圆形区域防守（共 ${state.defense.zones.length} 个）`);
       }
     } else {
       const x = Math.min(z.x, z.x + z.w), y = Math.min(z.y, z.y + z.h);
       const w = Math.abs(z.w), h = Math.abs(z.h);
       if (w > 16 && h > 12) {
         pushUndo();
+        // 一人一区：新建替换该球员原有区域
+        const had = z.player != null && state.defense.zones.some(x => String(x.player) === String(z.player));
+        if (z.player != null) state.defense.zones = state.defense.zones.filter(x => String(x.player) !== String(z.player));
         state.defense.zones.push({
           id: "z-" + Date.now().toString(36),
           x, y, w, h,
           label: "Zone " + (state.defense.zones.length + 1),
           player: z.player
         });
-        toast(`已添加区域防守范围（共 ${state.defense.zones.length} 个）`);
+        toast(had
+          ? `已替换该球员的原区域（一人一区，共 ${state.defense.zones.length} 个）`
+          : `已添加区域防守范围（共 ${state.defense.zones.length} 个）`);
       }
     }
     state.zoneDraft = null;
@@ -2987,10 +3096,11 @@ $("#board").addEventListener("pointerup", e => {
     render(); updateStats();
     return;
   }
-  // 已划定区域拖动调位结束
+  // 已划定区域拖动结束
   if (zDrag) {
-    if (zDrag.moved) toast("区域位置已调整");
+    if (zDrag.moved) toast(zDrag.mode === "resize" ? "区域大小已调整" : "区域位置已调整");
     zDrag = null;
+    $("#board").style.cursor = "";
     render(); updateStats();
     return;
   }
