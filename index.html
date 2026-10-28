@@ -138,7 +138,7 @@ footer{
   box-shadow:0 14px 40px rgba(0,0,0,.5); overflow:hidden;
   opacity:0; pointer-events:none; transform:translateY(-6px) scale(.97);
   transition:opacity .13s, transform .13s;
-  max-height:72vh; overflow-y:auto; overflow-x:hidden;
+  max-height:calc(100vh - 20px); overflow-y:auto; overflow-x:hidden;
 }
 #playerMenu.show{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
 .pm-head{
@@ -2162,6 +2162,19 @@ function svgPoint(e) {
 // ---------- 球员操作菜单 ----------
 const PM = $("#playerMenu");
 let pmPlayerId = null;
+let pmAnchor = { x: 0, y: 0 };   // 菜单锚点（打开时的指针位置），子菜单展开后据此重新贴边
+
+// 菜单定位：跟随指针，且始终完整落在窗口内（子菜单展开/收起后需重调）
+function positionPlayerMenu(cx, cy) {
+  const w = 178, h = PM.offsetHeight || 250;
+  let x = cx + 12, y = cy - 10;
+  if (x + w > window.innerWidth - 8) x = cx - w - 12;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  if (y < 8) y = 8;
+  if (x < 8) x = 8;
+  PM.style.left = x + "px";
+  PM.style.top = y + "px";
+}
 
 function showPlayerMenu(p, cx, cy) {
   pmPlayerId = p.id;
@@ -2229,14 +2242,9 @@ function showPlayerMenu(p, cx, cy) {
     }
   }
   if (manBox) manBox.classList.remove("open");
-  // 定位：跟随指针，且不出屏
-  const w = 178, h = PM.offsetHeight || 250;
-  let x = cx + 12, y = cy - 10;
-  if (x + w > window.innerWidth - 8) x = cx - w - 12;
-  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
-  if (y < 8) y = 8;
-  PM.style.left = x + "px";
-  PM.style.top = y + "px";
+  // 定位：跟随指针，且不出屏（记录锚点，子菜单展开后可重新贴边）
+  pmAnchor = { x: cx, y: cy };
+  positionPlayerMenu(cx, cy);
 }
 function hidePlayerMenu() {
   PM.classList.remove("show");
@@ -2279,6 +2287,7 @@ PM.addEventListener("click", e => {
   if (manBtn) {
     const sub = $("#pmMan");
     if (sub) sub.classList.toggle("open");
+    positionPlayerMenu(pmAnchor.x, pmAnchor.y);   // 高度变化后重新贴边
     return;
   }
   // 防守菜单：区域防守 → 进入画区域模式
@@ -2347,6 +2356,7 @@ PM.addEventListener("click", e => {
   if (treeToggle) {
     const sub = $("#pmTree");
     if (sub) sub.classList.toggle("open");
+    positionPlayerMenu(pmAnchor.x, pmAnchor.y);   // 高度变化后重新贴边
     return;
   }
   const it = e.target.closest(".pm-item");
