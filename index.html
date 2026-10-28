@@ -1487,14 +1487,23 @@ $("#printModal").addEventListener("pointerdown", e => {
 // ============================================================
 const pvState = { pages: [], idx: 0, layout: null };
 
-// 简化战术图：浅灰网格 + 青/红球员 + 黑路线（对齐参考稿风格）
+// 打印预览战术图：码数线球场背景（裁剪视图）+ 攻防双方球员位置标注 + 路线
+// 布局定义：
+//   1) 裁剪窗口 = 球员∪路线包围盒 + 边距（不展示全场，只保留交战区域）
+//   2) 按真实码数画竖向码数线（每 5 码一条，10 码线加深），顶部标注码数
+//   3) 黄虚线=LOS 开球线、青虚线=FIRST DOWN，作相对位置参照
+//   4) 球员圆内标注位置名（职责）：进攻青 / 防守红，按攻防两侧自然分区
+//   5) 路线黑线（跑动虚线/阻挡点线/传球实线）+ 末端标记（箭头/圆点/T 杆）
 function renderPlayMiniSVG(play, W, H) {
   const players = play.players || [];
   const routes = play.routes || [];
   if (!players.length && !routes.length)
-    return `<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f2f3f4"/></svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#f4f7f4"/></svg>`;
 
-  // 计算包围盒用于归一化
+  // 真实码数换算：两端端区之间为 0~100 码
+  const Fx0 = FIELD.x + EZ_W, Fw = FIELD.w - 2 * EZ_W;
+
+  // 计算包围盒（裁剪窗口）
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const touch = (x, y) => {
     if (x < minX) minX = x; if (x > maxX) maxX = x;
@@ -1502,8 +1511,8 @@ function renderPlayMiniSVG(play, W, H) {
   };
   players.forEach(p => touch(p.x, p.y));
   routes.forEach(r => (r.pts || []).forEach(p => touch(p.x, p.y)));
-  if (!isFinite(minX)) { minX = 0; maxX = 100; minY = 0; maxY = 100; }
-  const pad = 24;
+  if (!isFinite(minX)) { minX = FIELD.x; maxX = FIELD.x + FIELD.w; minY = FIELD.y; maxY = FIELD.y + FIELD.h; }
+  const pad = 26;
   minX -= pad; maxX += pad; minY -= pad; maxY += pad;
   const sc = Math.min(W / (maxX - minX), H / (maxY - minY));
   const offX = (W - (maxX - minX) * sc) / 2, offY = (H - (maxY - minY) * sc) / 2;
@@ -1511,14 +1520,25 @@ function renderPlayMiniSVG(play, W, H) {
   const Y = y => (y - minY) * sc + offY;
 
   let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
-  // 浅灰网格
-  s += `<rect width="${W}" height="${H}" fill="#f2f3f4"/>`;
-  for (let gx = 0; gx <= 10; gx++)
-    s += `<line x1="${(W * gx / 10).toFixed(1)}" y1="0" x2="${(W * gx / 10).toFixed(1)}" y2="${H}" stroke="#dfe2e5" stroke-width="0.6"/>`;
-  for (let gy = 0; gy <= 8; gy++)
-    s += `<line x1="0" y1="${(H * gy / 8).toFixed(1)}" x2="${W}" y2="${(H * gy / 8).toFixed(1)}" stroke="#dfe2e5" stroke-width="0.6"/>`;
-  // 中线
-  s += `<line x1="${W / 2}" y1="0" x2="${W / 2}" y2="${H}" stroke="#c6cbcf" stroke-width="1" stroke-dasharray="4 3"/>`;
+  s += `<rect width="${W}" height="${H}" fill="#f4f7f4"/>`;
+
+  // 码数线：每 5 码一条竖线；10 码线加深并标注码数
+  for (let yd = 0; yd <= 100; yd += 5) {
+    const x = Fx0 + Fw * yd / 100;
+    if (x < minX - 1 || x > maxX + 1) continue;
+    const px = X(x);
+    const major = yd % 10 === 0;
+    s += `<line x1="${px.toFixed(1)}" y1="0" x2="${px.toFixed(1)}" y2="${H}" stroke="${major ? "#c3ccc3" : "#dee5de"}" stroke-width="${major ? 1 : 0.6}"/>`;
+    if (major && yd > 0 && yd < 100) {
+      const num = yd <= 50 ? yd : 100 - yd;
+      s += `<text x="${px.toFixed(1)}" y="11" text-anchor="middle" font-size="8" fill="#93a293" font-family="sans-serif">${num}</text>`;
+    }
+  }
+  // LOS / FIRST DOWN 参照线
+  const losX = X(FIELD.x + FIELD.w * 0.42), fdX = X(FIELD.x + FIELD.w * 0.545);
+  s += `<line x1="${losX.toFixed(1)}" y1="0" x2="${losX.toFixed(1)}" y2="${H}" stroke="#d8b64c" stroke-width="1.4" stroke-dasharray="5 3"/>`;
+  s += `<text x="${(losX + 3).toFixed(1)}" y="22" font-size="7.5" fill="#a8842c" font-family="sans-serif">LOS</text>`;
+  s += `<line x1="${fdX.toFixed(1)}" y1="0" x2="${fdX.toFixed(1)}" y2="${H}" stroke="#43c7e8" stroke-width="1.2" stroke-dasharray="5 3"/>`;
 
   // 路线
   routes.forEach(r => {
@@ -1544,10 +1564,13 @@ function renderPlayMiniSVG(play, W, H) {
     }
   });
 
-  // 球员点（进攻青、防守红）
+  // 球员：圆内标注位置名/职责（进攻青、防守红），按攻防两侧分区
   players.forEach(p => {
     const col = p.side === "off" ? "#2aa3a3" : "#d64545";
-    s += `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="3.6" fill="${col}" stroke="#fff" stroke-width="0.8"/>`;
+    const px = X(p.x), py = Y(p.y);
+    s += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7.2" fill="${col}" stroke="#fff" stroke-width="1.1"/>`;
+    const nm = String(p.num || "").slice(0, 4);
+    s += `<text x="${px.toFixed(1)}" y="${(py + 2.4).toFixed(1)}" text-anchor="middle" font-size="6.4" font-weight="700" fill="#fff" font-family="sans-serif">${nm}</text>`;
   });
 
   s += `</svg>`;
@@ -1842,8 +1865,10 @@ function render() {
   // 防守图层：区域范围 + 盯人连线
   drawDefense(gD);
 
-  // 球员
+  // 球员（按视角过滤：off=只进攻组，def=只防守组，all=全部）
   state.players.forEach(p => {
+    if (view === "off" && p.side !== "off") return;
+    if (view === "def" && p.side !== "def") return;
     const isOff = p.side === "off";
     const fill = isOff ? COLORS.off : COLORS.def;
     const stroke = state.selected === p.id ? "#fff" : (isOff ? "#9fd0ff" : "#ffb3ab");
@@ -1969,9 +1994,12 @@ function buildTreeRoute(form, player, mirror, type) {
   };
 }
 
-// 计算路线终点的切线方向（角度制）。曲线用真实切线，避免箭头与弧线末端错位
+// 计算路线终点的切线方向（角度制）。曲线用真实切线，避免箭头与弧线末端错位；
+// 末端退化短折点(<3px)跳过，角度按可见线段方向计算（否则 T 杆/箭头会指向短棍方向）
 function routeEndAngle(pathEl, pts, isBlock) {
   if (!pts || pts.length < 2) return 0;
+  let i = pts.length - 1;
+  while (i > 0 && Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) < 3) i--;
   if (!isBlock && pathEl) {
     try {
       const L = pathEl.getTotalLength();
@@ -1984,7 +2012,7 @@ function routeEndAngle(pathEl, pts, isBlock) {
       }
     } catch (err) { /* 老浏览器兜底 */ }
   }
-  const a = pts[pts.length - 2], b = pts[pts.length - 1];
+  const a = pts[Math.max(0, i - 1)], b = pts[i];
   return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
 }
 
