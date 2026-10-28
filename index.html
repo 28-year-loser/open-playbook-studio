@@ -1966,20 +1966,26 @@ function drawDefense(g) {
   if (state.view === "off") return;
 
   // 1) 区域防守范围（矩形或圆形）：默认淡化，悬停归属球员时高亮
+  //    fill/stroke 同时写内联属性——导出 PDF/PNG 会剥离 class 且无页面 CSS，靠属性保色（否则显示黑色）
   (df.zones || []).forEach(z => {
     const ownerHot = (z.player == null) || String(state.hoverPlayer) === String(z.player);
     const gg = el("g", {
       class: "zone-cov" + (ownerHot ? " hot" : ""),
       "data-player": (z.player != null ? z.player : "")
     }, g);
+    const shapeAttrs = {
+      class: "zone-shape",
+      fill: "rgba(95,185,255,.30)", stroke: "#7fc4ff",
+      "stroke-width": 2, "stroke-dasharray": "6 4"
+    };
     if (z.shape === "circle") {
       el("ellipse", {
-        class: "zone-shape",
+        ...shapeAttrs,
         cx: z.cx, cy: z.cy, rx: z.rx, ry: z.ry
       }, gg);
       if (z.label) {
         const t = el("text", {
-          class: "zone-label",
+          class: "zone-label", fill: "#eaf6ff",
           x: z.cx, y: z.cy - z.ry + 16, "text-anchor": "middle",
           "font-size": 12, "font-weight": 700
         }, gg);
@@ -1987,12 +1993,12 @@ function drawDefense(g) {
       }
     } else {
       el("rect", {
-        class: "zone-shape",
+        ...shapeAttrs,
         x: z.x, y: z.y, width: z.w, height: z.h, rx: 6
       }, gg);
       if (z.label) {
         const t = el("text", {
-          class: "zone-label",
+          class: "zone-label", fill: "#eaf6ff",
           x: z.x + 8, y: z.y + 18,
           "font-size": 12, "font-weight": 700
         }, gg);
@@ -2083,6 +2089,12 @@ function undoPlayer(p) {
     if (r.player === p.id && r.pts && r.pts.length)
       r.pts = r.pts.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
   });
+  // 区域防守范围跟随回退
+  (state.defense.zones || []).forEach(z => {
+    if (z.player !== p.id) return;
+    if (z.shape === "circle") { z.cx += dx; z.cy += dy; }
+    else { z.x += dx; z.y += dy; }
+  });
   render(); updateStats(); refreshSelPanel();
   return true;
 }
@@ -2096,6 +2108,12 @@ function undoPlayerAll(p) {
   state.routes.forEach(r => {
     if (r.player === p.id && r.pts && r.pts.length)
       r.pts = r.pts.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+  });
+  // 区域防守范围跟随回退
+  (state.defense.zones || []).forEach(z => {
+    if (z.player !== p.id) return;
+    if (z.shape === "circle") { z.cx += dx; z.cy += dy; }
+    else { z.x += dx; z.y += dy; }
   });
   render(); updateStats(); refreshSelPanel();
   return n;
@@ -2652,11 +2670,17 @@ function startDrag(e, p) {
     const routeOffset = state.routes
       .filter(r => r.player === p.id && r.pts && r.pts.length)
       .map(r => ({ id: r.id, pts: r.pts.map(pt => ({ x: pt.x - p.x, y: pt.y - p.y })) }));
+    // 记录该球员名下区域防守范围的偏移，拖动时 Zone 跟随球员
+    const zoneOffset = (state.defense.zones || [])
+      .filter(z => z.player === p.id)
+      .map(z => (z.shape === "circle"
+        ? { id: z.id, shape: "circle", dx: z.cx - p.x, dy: z.cy - p.y }
+        : { id: z.id, shape: "rect", dx: z.x - p.x, dy: z.y - p.y }));
     drag = {
       id: p.id, ox: start.x - p.x, oy: start.y - p.y, moved: false,
       startX: p.x, startY: p.y,
       clientX: e.clientX, clientY: e.clientY,
-      routeOffset
+      routeOffset, zoneOffset
     };
     $("#board").setPointerCapture(e.pointerId);
     render(); refreshSelPanel();
@@ -2768,6 +2792,15 @@ $("#board").addEventListener("pointermove", e => {
       drag.routeOffset.forEach(ro => {
         const r = state.routes.find(x => x.id === ro.id);
         if (r) r.pts = ro.pts.map(off => ({ x: p.x + off.x, y: p.y + off.y }));
+      });
+    }
+    // 区域防守范围跟随球员（矩形用 x/y，圆形用 cx/cy 圆心）
+    if (drag.zoneOffset) {
+      drag.zoneOffset.forEach(zo => {
+        const z = (state.defense.zones || []).find(x => x.id === zo.id);
+        if (!z) return;
+        if (z.shape === "circle") { z.cx = p.x + zo.dx; z.cy = p.y + zo.dy; }
+        else { z.x = p.x + zo.dx; z.y = p.y + zo.dy; }
       });
     }
     drag.moved = true;
