@@ -611,7 +611,6 @@ aside::-webkit-scrollbar-corner,
 
 <div id="playerMenu">
   <div class="pm-head" id="pmHead"><b>球员</b></div>
-  <div class="pm-item" data-act="move" data-side="both">✋&nbsp; 移动球员<span class="k">V</span></div>
   <!-- 自由路线（攻守通用） -->
   <div class="pm-item" data-act="run" data-side="both">🏃&nbsp; 画跑动路线<span class="k">R</span></div>
   <div class="pm-item" data-act="pass" data-side="both">🎯&nbsp; 画传球路线<span class="k">P</span></div>
@@ -2612,11 +2611,7 @@ PM.addEventListener("click", e => {
   hidePlayerMenu();
   if (!p) return;
 
-  if (act === "move") {
-    setTool("select");
-    state.selected = p.id; render(); refreshSelPanel();
-    toast(`已选中 ${p.num} — 现在可拖动移动，或按 Ctrl+Z 撤销它的移动`);
-  } else if (act === "run" || act === "pass" || act === "block") {
+  if (act === "run" || act === "pass" || act === "block") {
     // 直接以该球员为起点进入路线绘制
     state.tool = act;
     document.querySelectorAll("#toolGroup button").forEach(b =>
