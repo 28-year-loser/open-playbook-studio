@@ -2402,6 +2402,16 @@ function rehChase(from, to, speed, dt) {
 function rehStep(reh, st, dt) {
   if (!reh.playing || reh.done) return;
   reh.t += dt;
+  // 实时同步：每帧从当前战术读取路线/区域几何（演练中拖动折点/区域立即生效）
+  reh.routes = rehPickRoutes(st);
+  const prevZ = {};
+  reh.zones.forEach(z => { prevZ[String(z.zone && z.zone.id || z.playerId)] = z; });
+  reh.zones = rehPickZonePlayers(st).map(nz => {
+    const old = prevZ[String(nz.zone && nz.zone.id || nz.playerId)];
+    if (old) { nz.triggered = old.triggered; nz.targetBall = old.targetBall; }
+    return nz;
+  });
+
   const zg = {};
   reh.zones.forEach(z => { zg[String(z.playerId)] = z; });
   st.players.forEach(p => {
@@ -2422,9 +2432,13 @@ function rehStep(reh, st, dt) {
       const fromP = reh.live[String(b.fromId)];
       const toP = reh.live[String(b.toId)];
       if (!fromP || !toP) return;
+      // 出手时机：抛球人路线完成度达到 releaseAt 即出手；
+      // 抛球人无路线时按开局时间折算（releaseAt×1.5 秒），避免球永远滞留手中
       const prog = reh.progress[String(b.fromId)] || 0;
-      const total = (reh.routes[String(b.fromId)] || { total: 1 }).total || 1;
-      if (!b.launched && prog / total >= b.releaseAt) {
+      const routeF = reh.routes[String(b.fromId)];
+      const total = routeF ? routeF.total : 0;
+      const reached = total > 1 ? (prog / total >= b.releaseAt) : (reh.t >= b.releaseAt * 1.5);
+      if (!b.launched && reached) {
         b.launched = true;
         b.launchFrom = { x: fromP.x, y: fromP.y };
       }
