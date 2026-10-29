@@ -474,6 +474,10 @@ aside::-webkit-scrollbar-corner,
   <button id="btnUndo" title="撤销 (Ctrl+Z)">⟲ 撤销</button>
   <button id="btnRedo" title="重做 (Ctrl+Y)">⟳ 重做</button>
   <div class="sep"></div>
+  <button id="btnFitView" title="视图适应战术内容">⤢ 适应</button>
+  <button id="btnZoomIn" title="放大">🔍＋</button>
+  <button id="btnZoomOut" title="缩小">🔍－</button>
+  <button id="btnFullView" title="全览球场">🗺 全览</button>
   <button id="btnRehearse">🎬 演练</button>
   <button id="btnAddPlayer">＋ 添加球员</button>
   <button id="btnClear">清空路线</button>
@@ -2126,11 +2130,13 @@ function drawRoute(g, r, isDraft) {
     "stroke-width": 16, stroke: "transparent", fill: "none"
   }, g);
 
+  // 选中球员的路线：加粗强调（重点突出战术路线与关键位置）
+  const ownerSelected = r.player != null && String(state.selected) === String(r.player);
   const mainPath = el("path", {
     d, fill: "none", stroke: color,
-    "stroke-width": r.type === "block" ? 4 : 3.4,
+    "stroke-width": r.type === "block" ? (ownerSelected ? 5.6 : 4) : (ownerSelected ? 5 : 3.4),
     "stroke-dasharray": dash, "stroke-linecap": "round",
-    "stroke-linejoin": "round", opacity: isDraft ? .72 : .93
+    "stroke-linejoin": "round", opacity: isDraft ? .72 : (ownerSelected ? 1 : .93)
   }, g);
 
   // 终点标记：传球=箭头 ▶ ｜ 跑动=空心圆 ○ ｜ 阻挡=T 字 ─┴─
@@ -2174,6 +2180,82 @@ function drawRoute(g, r, isDraft) {
   }, g);
 }
 
+
+
+// ============================================================
+//  视口缩放：按战术内容自适应（Playmaker X 式清晰显示）
+//  viewBox 等比缩放 → 元素大小随图片比例灵活调整，矢量不模糊
+// ============================================================
+const VIEW_FULL = { x: 0, y: 0, w: 1000, h: 560 };
+let viewBox = { ...VIEW_FULL };
+
+function contentBBox(pad) {
+  pad = pad == null ? 26 : pad;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const touch = (x, y) => {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  };
+  state.players.forEach(p => touch(p.x, p.y));
+  state.players.forEach(p => { touch(p.x - PLAYER_R, p.y - PLAYER_R); touch(p.x + PLAYER_R, p.y + PLAYER_R); });
+  state.routes.forEach(r => (r.pts || []).forEach(p => touch(p.x, p.y)));
+  (state.defense.zones || []).forEach(z => {
+    if (z.shape === "circle") {
+      touch(z.cx - z.rx, z.cy - z.ry); touch(z.cx + z.rx, z.cy + z.ry);
+    } else {
+      touch(Math.min(z.x, z.x + z.w), Math.min(z.y, z.y + z.h));
+      touch(Math.max(z.x, z.x + z.w), Math.max(z.y, z.y + z.h));
+    }
+  });
+  if (!isFinite(minX)) return { ...VIEW_FULL };
+  minX -= pad; maxX += pad; minY -= pad; maxY += pad;
+  return { x: minX, y: minY, w: Math.max(60, maxX - minX), h: Math.max(40, maxY - minY) };
+}
+
+function applyViewBox() {
+  const svg = $("#board");
+  svg.setAttribute("viewBox",
+    `${viewBox.x.toFixed(1)} ${viewBox.y.toFixed(1)} ${viewBox.w.toFixed(1)} ${viewBox.h.toFixed(1)}`);
+}
+
+function fitViewToContent() {
+  const b = contentBBox();
+  const ratio = 1000 / 560;
+  let w = b.w, h = b.h;
+  if (w / h > ratio) h = w / ratio; else w = h * ratio;
+  viewBox = { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
+  applyViewBox();
+  toast("视图已适应战术内容");
+}
+
+function resetView() {
+  viewBox = { ...VIEW_FULL };
+  applyViewBox();
+  toast("已全览球场");
+}
+
+function zoomView(factor, cx, cy) {
+  const b = viewBox;
+  const cxv = cx == null ? b.x + b.w / 2 : cx;
+  const cyv = cy == null ? b.y + b.h / 2 : cy;
+  const nw = Math.min(1200, Math.max(180, b.w * factor));
+  const nh = nw * (560 / 1000);
+  viewBox = {
+    x: cxv - (cxv - b.x) * (nw / b.w),
+    y: cyv - (cyv - b.y) * (nh / b.h),
+    w: nw, h: nh
+  };
+  applyViewBox();
+}
+
+$("#board").addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = $("#board").getBoundingClientRect();
+  const sx = (e.clientX - r.left) / r.width, sy = (e.clientY - r.top) / r.height;
+  const cx = viewBox.x + sx * viewBox.w;
+  const cy = viewBox.y + sy * viewBox.h;
+  zoomView(e.deltaY < 0 ? 0.85 : 1.18, cx, cy);
+}, { passive: false });
 
 // ===================== 战术演练引擎（与大众版同源） =====================
 function rehPickRoutes(st) {
@@ -3568,7 +3650,33 @@ $("#board").addEventListener("pointermove", e => {
   }
 });
 
+// 视图平移：空白处拖动移动视口（点按仍为取消选中）
+let viewPan = null;
+$("#board").addEventListener("pointerdown", e => {
+  if (state.drawing || state.zoneDraft || state.tool !== "select" || reh) return;
+  const onPlayer = e.target.closest && e.target.closest(".player");
+  const onHandle = e.target.closest && e.target.closest(".route-handle");
+  const onZone = e.target.closest && e.target.closest(".zone-cov");
+  const onHit = e.target.closest && e.target.closest(".route-hit");
+  if (onPlayer || onHandle || onZone || onHit) return;
+  viewPan = { x: e.clientX, y: e.clientY, vx: viewBox.x, vy: viewBox.y, moved: false };
+});
+window.addEventListener("pointermove", e => {
+  if (!viewPan) return;
+  const r = $("#board").getBoundingClientRect();
+  const dx = (e.clientX - viewPan.x) / r.width * viewBox.w;
+  const dy = (e.clientY - viewPan.y) / r.height * viewBox.h;
+  if (Math.abs(e.clientX - viewPan.x) + Math.abs(e.clientY - viewPan.y) > 4) {
+    viewPan.moved = true;
+    viewBox.x = viewPan.vx - dx;
+    viewBox.y = viewPan.vy - dy;
+    applyViewBox();
+  }
+});
+window.addEventListener("pointerup", () => { setTimeout(() => { viewPan = null; }, 0); });
+
 $("#board").addEventListener("pointerup", e => {
+  if (viewPan && viewPan.moved) { viewPan = null; return; }
   // 一笔画：拖动画完路线后抬手 = 立即自动结束并确认（无需双击）
   if (state.drawing) {
     const dr = state.drawing;
@@ -3900,6 +4008,10 @@ function nmSubmit() {
     toast(`已添加${nmSide === "def" ? "防守" : "进攻"}球员「${s}」`);
   }
 }
+$("#btnFitView").onclick = () => fitViewToContent();
+$("#btnFullView").onclick = () => resetView();
+$("#btnZoomIn").onclick = () => zoomView(0.8);
+$("#btnZoomOut").onclick = () => zoomView(1.25);
 $("#btnRehearse").onclick = () => enterRehearsal();
 $("#rehPlay").onclick = () => {
   if (!reh) return;
@@ -4077,7 +4189,13 @@ function renderPlayCanvas(cb, quality, svgSrc) {
     const ctx = c.getContext("2d");
     ctx.fillStyle = "#0f1419";
     ctx.fillRect(0, 0, c.width, c.height);
-    ctx.drawImage(img, 0, 0, c.width, c.height);
+    // 按战术内容比例裁剪放大（重点突出路线与站位，避免全幅小图细节模糊）
+    const b = contentBBox(40);
+    const k = Math.min(c.width / b.w, c.height / b.h);
+    const dw = 1000 * k, dh = 560 * k;
+    const ox = -(b.x * k) + (c.width - b.w * k) / 2;
+    const oy = -(b.y * k) + (c.height - b.h * k) / 2;
+    ctx.drawImage(img, ox, oy, dw, dh);
     URL.revokeObjectURL(url);
     cb(c);
   };
