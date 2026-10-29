@@ -666,6 +666,7 @@ aside::-webkit-scrollbar-corner,
   <div class="pm-head" id="rmHead"><b>路线</b></div>
   <div class="pm-item" data-ract="edit">✏️&nbsp; 编辑折点<span class="k">E</span></div>
   <div class="pm-item" data-ract="addpt">➕&nbsp; 追加折点</div>
+  <div class="pm-item" data-ract="delpt">🗑&nbsp; 删除折点</div>
   <div class="pm-sep"></div>
   <div class="pm-item" data-ract="run">🏃&nbsp; 改为跑动路线</div>
   <div class="pm-item" data-ract="pass">🎯&nbsp; 改为传球路线</div>
@@ -2014,25 +2015,27 @@ function smoothPathD(pts, tension) {
 //  坐标约定：+x = 进攻方向（向右）；y 正 = 内侧（向中路），y 负 = 外侧（向边线）
 //  buildTreeRoute 会按球员所在的半场自动翻转 y，保证内/外侧正确
 // ============================================================
+// 码数标准：7.36 单位 = 1 码。折点深度——Post/Corner/In/Out/Curl/Comeback = 10 码；
+// Flat/Slant = 3 码；Go 直线无折点（对齐 Basic Route Tree）
 const ROUTE_TREE = [
   { name: "Go / Fly 直飞", note: "垂直直插到底线，甩开盯防",
-   pts: [[0,0],[70,0],[190,0]] },
-  { name: "Slant 斜插", note: "向前 3 步后内侧 45° 切入",
-   pts: [[0,0],[45,0],[130,85]] },
-  { name: "Out 外切", note: "向前后 90° 向边线切出",
-   pts: [[0,0],[75,0],[75,-85]] },
-  { name: "In / Dig 内切", note: "向前后 90° 向中路切入",
-   pts: [[0,0],[75,0],[75,85]] },
-  { name: "Corner 外侧斜上", note: "向外侧弧线打身后",
-   pts: [[0,0],[55,0],[120,-55],[165,-115]] },
-  { name: "Post 内侧斜上", note: "向内侧弧线冲击端区",
-   pts: [[0,0],[55,0],[120,55],[165,115]] },
-  { name: "Curl 急停回身", note: "跑 8 码后急停回头接球",
-   pts: [[0,0],[85,0],[72,-18],[55,-22]] },
-  { name: "Comeback 回跑", note: "跑深后回身向后迎球",
-   pts: [[0,0],[135,0],[108,-32],[85,-45]] },
-  { name: "Flat 平出", note: "短距离向外侧拉开",
-   pts: [[0,0],[28,-42],[38,-88]] }
+   pts: [[0,0],[74,0],[190,0]] },
+  { name: "Slant 斜插", note: "3 码后内侧 45° 切入",
+   pts: [[0,0],[22,0],[107,85]] },
+  { name: "Out 外切", note: "10 码后 90° 向边线切出",
+   pts: [[0,0],[74,0],[74,-85]] },
+  { name: "In / Dig 内切", note: "10 码后 90° 向中路切入",
+   pts: [[0,0],[74,0],[74,85]] },
+  { name: "Corner 外侧斜上", note: "10 码后向外侧 45° 打身后",
+   pts: [[0,0],[74,0],[139,-55],[184,-115]] },
+  { name: "Post 内侧斜上", note: "10 码后向内侧 45° 冲击端区",
+   pts: [[0,0],[74,0],[139,55],[184,115]] },
+  { name: "Curl 急停回身", note: "10 码后急停回头接球",
+   pts: [[0,0],[74,0],[61,-18],[44,-22]] },
+  { name: "Comeback 回跑", note: "10 码后回身向后迎球",
+   pts: [[0,0],[74,0],[47,-32],[24,-45]] },
+  { name: "Flat 平出", note: "3 码后向外侧平出拉开",
+   pts: [[0,0],[22,-15],[32,-88]] }
 ];
 
 // 以球员为起点生成路线。mirror=进攻方向反向（防守/右半场）；type=run|pass
@@ -3224,6 +3227,14 @@ RTM.addEventListener("click", e => {
     state.routeEdit = true;
     render();
     toast("已追加折点，拖动它调整");
+  } else if (act === "delpt") {
+    state.selectedRoute = r.id;
+    state.routeEdit = true;
+    state.delPt = r.id;
+    render();
+    $("#status").innerHTML =
+      "<b>删除折点</b> — 点击要删除的<b>折点手柄</b>（至少保留 2 个）；<b>Esc</b> 退出。";
+    toast("点击折点即可删除");
   }
 });
 
@@ -3314,6 +3325,28 @@ $("#board").addEventListener("pointerdown", e => {
   // 折点手柄拖动
   const handle = e.target.closest && e.target.closest(".route-handle");
   if (handle) {
+    // 删除折点模式：点手柄=删除该折点
+    if (state.delPt && String(handle.getAttribute("data-rid")) === String(state.delPt)) {
+      const di = parseInt(handle.getAttribute("data-idx"), 10);
+      const dr = state.routes.find(x => String(x.id) === String(state.delPt));
+      if (dr && dr.pts.length > 2 && di >= 0 && di < dr.pts.length) {
+        pushUndo();
+        dr.pts.splice(di, 1);
+        render(); updateStats();
+        if (dr.pts.length <= 2) {
+          state.delPt = null;
+          state.routeEdit = false;
+          $("#status").innerHTML = "折点编辑完成。";
+          toast("已删除折点（至少保留 2 个）");
+        } else {
+          toast("已删除折点，可继续点选手柄删除");
+        }
+      } else {
+        toast("至少保留 2 个折点");
+      }
+      e.stopPropagation();
+      return;
+    }
     const rid = handle.getAttribute("data-rid");
     const idx = parseInt(handle.getAttribute("data-idx"), 10);
     const r = state.routes.find(x => String(x.id) === String(rid));
@@ -4172,6 +4205,7 @@ document.addEventListener("keydown", e => {
   else if (k === "escape") {
     if (state.routeEdit) {
       state.routeEdit = false;
+      state.delPt = null;
       $("#status").innerHTML = "折点编辑完成。";
       render(); toast("折点编辑完成");
     } else if (state.zoneDraft) {
