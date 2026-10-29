@@ -926,7 +926,6 @@ function drawField() {
   const ez1 = el("text", {
     x: FIELD.x - EZ_W / 2, y: FIELD.y + FIELD.h / 2,
     fill: "rgba(255,255,255,.34)", "font-size": 28, "font-weight": 800,
-    stroke: "rgba(8,14,20,.45)", "stroke-width": 3, "paint-order": "stroke",
     "text-anchor": "middle", "dominant-baseline": "middle",
     transform: `rotate(-90 ${FIELD.x - EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
@@ -934,7 +933,6 @@ function drawField() {
   const ez2 = el("text", {
     x: FIELD.x + FIELD.w + EZ_W / 2, y: FIELD.y + FIELD.h / 2,
     fill: "rgba(255,255,255,.34)", "font-size": 28, "font-weight": 800,
-    stroke: "rgba(8,14,20,.45)", "stroke-width": 3, "paint-order": "stroke",
     "text-anchor": "middle", "dominant-baseline": "middle",
     transform: `rotate(90 ${FIELD.x + FIELD.w + EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
@@ -969,13 +967,11 @@ function drawField() {
       const t1 = el("text", {
         x: x, y: FIELD.y + 32, fill: "rgba(255,255,255,.42)",
         "font-size": 22, "font-weight": 800, "text-anchor": "middle",
-        stroke: "rgba(8,14,20,.4)", "stroke-width": 2.6, "paint-order": "stroke"
       }, g);
       t1.textContent = yd;
       const t2 = el("text", {
         x: x, y: FIELD.y + FIELD.h - 16, fill: "rgba(255,255,255,.42)",
         "font-size": 22, "font-weight": 800, "text-anchor": "middle",
-        stroke: "rgba(8,14,20,.4)", "stroke-width": 2.6, "paint-order": "stroke"
       }, g);
       t2.textContent = yd;
     }
@@ -1007,7 +1003,6 @@ function drawField() {
   const losT = el("text", {
     x: losX, y: FIELD.y - 13, fill: "#ffe66b",
     "font-size": 14, "font-weight": 800, "text-anchor": "middle",
-    stroke: "rgba(8,14,20,.5)", "stroke-width": 2.8, "paint-order": "stroke"
   }, g);
   losT.textContent = "LOS 开球线";
 
@@ -1020,7 +1015,6 @@ function drawField() {
   const fdT = el("text", {
     x: fdX, y: FIELD.y - 13, fill: "#7ee0ff",
     "font-size": 14, "font-weight": 800, "text-anchor": "middle",
-    stroke: "rgba(8,14,20,.5)", "stroke-width": 2.8, "paint-order": "stroke"
   }, g);
   fdT.textContent = "FIRST DOWN";
 
@@ -1992,7 +1986,6 @@ function render() {
     const t = el("text", {
       x: p.x, y: p.y + 4.2,
       "text-anchor": "middle", "font-size": numStr.length >= 4 ? 9.5 : numStr.length === 3 ? 11 : 12.5,
-      stroke: "rgba(8,14,20,.52)", "stroke-width": 2.6, "paint-order": "stroke",
       fill: isOff ? COLORS.offText : COLORS.defText
     }, g);
     t.textContent = numStr;
