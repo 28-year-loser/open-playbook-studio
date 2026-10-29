@@ -2029,9 +2029,9 @@ const ROUTE_TREE = [
    pts: [[0,0],[86,0],[60.2,-26]] },
   { name: "Curl 急停回身", note: "10 码线折，7 码线回身接球",
    pts: [[0,0],[86,0],[60.2,-14]] },
-  { name: "Out 外切", note: "10 码线折，90° 向边线切出",
+  { name: "Out 外切", note: "10 码线折，90° 直角向边线切出", sharp: true,
    pts: [[0,0],[86,0],[86,-85]] },
-  { name: "In / Dig 内切", note: "10 码线折，90° 向中路切入",
+  { name: "In / Dig 内切", note: "10 码线折，90° 直角向中路切入", sharp: true,
    pts: [[0,0],[86,0],[86,85]] },
   { name: "Corner 外侧斜上", note: "10 码线单折点，45° 直插身后",
    pts: [[0,0],[86,0],[186,-100]] },
@@ -2052,6 +2052,7 @@ function buildTreeRoute(form, player, mirror, type) {
     id: state.nextId++,
     side: player ? player.side : state.side,
     type: type || "run",
+    sharp: !!form.sharp,   // 直角折点路线（In/Out）不走平滑
     pts: form.pts.map(p => ({ x: base.x + p[0] * dirX, y: base.y + p[1] * dirY })),
     player: player ? player.id : null
   };
@@ -2113,8 +2114,8 @@ function drawRoute(g, r, isDraft) {
   const trimLen = r.type === "pass" ? 13 : r.type === "run" ? 7.2 : 0;
   const linePts = pts.length >= 2 ? trimEndPts(pts, trimLen) : pts;
   // 跑动/传球走弧线（Catmull-Rom 平滑），阻挡保持直线
-  const d = (linePts.length < 2) ? "" : (isBlock
-    ? linePts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")
+  const d = (linePts.length < 2) ? "" : ((isBlock || r.sharp)
+    ? linePts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")   // 直角路线保持 90° 折点
     : smoothPathD(linePts, 0.5));
 
   // 加宽的透明命中区
