@@ -2957,7 +2957,8 @@ function startDrag(e, p) {
     id: state.nextId++,
     side: p.side, type: state.tool === "run" ? "run" : state.tool === "pass" ? "pass" : "block",
     pts: [{ x: pt.x, y: pt.y }], player: p.id,
-    preview: { x: pt.x, y: pt.y }   // 预览点，跟随指针，右键/左键才确定
+    preview: { x: pt.x, y: pt.y },  // 预览点，跟随指针
+    _press: true
   };
   render();
 }
@@ -3008,6 +3009,15 @@ $("#board").addEventListener("pointerdown", e => {
   if (state.drawing) {
     if (e.button === 2) return; // 右键用于结束路线，不加点
     const pt = svgPoint(e);
+    // 双击/双触收尾：识别为结束手势，不落折点（避免收尾手势本身画出多余轨迹）
+    const now = Date.now();
+    if (state.drawing.pts.length >= 2 && now - (state.drawing._lastTapAt || 0) < 330) {
+      state.drawing._lastTapAt = 0;
+      finalizeDrawing();
+      return;
+    }
+    state.drawing._lastTapAt = now;
+    state.drawing._press = true;
     // 落定一个折点（当前预览点）
     state.drawing.pts.push({ x: pt.x, y: pt.y });
     state.drawing.preview = { x: pt.x, y: pt.y };
@@ -3159,13 +3169,30 @@ $("#board").addEventListener("pointermove", e => {
   }
   if (state.drawing && state.drawing.pts.length) {
     const pt = svgPoint(e);
+    const dr = state.drawing;
+    // 一笔画：拖动时按最小间距落轨迹点（收尾即整条路线）
+    const lp = dr.pts[dr.pts.length - 1];
+    if (dr._press && Math.hypot(pt.x - lp.x, pt.y - lp.y) >= 10) {
+      dr.pts.push({ x: pt.x, y: pt.y });
+      dr._stroke = true;
+    }
     // 实时预览：预览点跟随指针（不并入已定折点）
-    state.drawing.preview = { x: pt.x, y: pt.y };
+    dr.preview = { x: pt.x, y: pt.y };
     render();
   }
 });
 
 $("#board").addEventListener("pointerup", e => {
+  // 一笔画：拖动画完路线后抬手 = 立即自动结束并确认（无需双击）
+  if (state.drawing) {
+    const dr = state.drawing;
+    dr._press = false;
+    if (dr._stroke) {
+      finalizeDrawing({ commitEnd: true });
+      return;
+    }
+    return; // 点按折点模式：等待继续加点或显式收尾
+  }
   // 折点拖动结束
   if (ptDrag) {
     if (ptDrag.moved) {
@@ -3249,16 +3276,20 @@ $("#board").addEventListener("pointerup", e => {
 });
 
 // 收尾当前正在画的路线（左键加点 → 右键/双击结束）
-function finalizeDrawing() {
+function finalizeDrawing(opts) {
+  opts = opts || {};
   const dr = state.drawing;
   if (dr && dr.pts.length >= 1) {
-    // 把最后的预览点落定为终点（若与最后折点不重合）
-    if (dr.preview) {
+    // 一笔画完（抬手收尾）：补落指尖终点，保证准确停止；
+    // 显式收尾（右键/双击/按钮）：不补点，避免多出一小段多余轨迹
+    if (dr.preview && opts.commitEnd) {
       const lp = dr.pts[dr.pts.length - 1];
-      if (Math.hypot(dr.preview.x - lp.x, dr.preview.y - lp.y) > 1)
+      if (Math.hypot(dr.preview.x - lp.x, dr.preview.y - lp.y) > 4)
         dr.pts.push({ x: dr.preview.x, y: dr.preview.y });
     }
     delete dr.preview;
+    delete dr._lastTapAt;
+    delete dr._stroke;
     if (dr.pts.length >= 2) {
       pushUndo();
       state.routes.push(dr);
@@ -3293,16 +3324,6 @@ $("#board").addEventListener("dblclick", e => {
     finalizeDrawing();
     e.stopPropagation();
   }
-});
-
-// 触屏：双击画布收尾
-let lastTap = 0;
-$("#board").addEventListener("pointerup", e => {
-  const now = Date.now();
-  if (now - lastTap < 330 && state.drawing && state.drawing.pts.length >= 2) {
-    finalizeDrawing();
-  }
-  lastTap = now;
 });
 
 // ============================================================
