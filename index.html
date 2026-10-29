@@ -840,7 +840,7 @@ const undoStack = [], redoStack = [];
 const $ = s => document.querySelector(s);
 const el = (tag, attrs = {}, parent) => {
   const n = document.createElementNS(SVGNS, tag);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  for (const k in attrs) if (attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
   if (parent) parent.appendChild(n);
   return n;
 };
@@ -902,6 +902,11 @@ function rotGroup() {
   return rot;
 }
 
+// 文字正立补偿：竖屏页整体旋转 -90°，文字加 +90° 反转保持可读
+function txtRot(x, y) {
+  return viewPortrait ? `rotate(90 ${x} ${y})` : undefined;
+}
+
 function drawField() {
   const svg = $("#board");
   svg.innerHTML = "";
@@ -927,14 +932,14 @@ function drawField() {
     x: FIELD.x - EZ_W / 2, y: FIELD.y + FIELD.h / 2,
     fill: "rgba(255,255,255,.34)", "font-size": 28, "font-weight": 800,
     "text-anchor": "middle", "dominant-baseline": "middle",
-    transform: `rotate(-90 ${FIELD.x - EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
+    transform: viewPortrait ? `rotate(90 ${FIELD.x - EZ_W / 2} ${FIELD.y + FIELD.h / 2})` : `rotate(-90 ${FIELD.x - EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
   ez1.textContent = "END ZONE";
   const ez2 = el("text", {
     x: FIELD.x + FIELD.w + EZ_W / 2, y: FIELD.y + FIELD.h / 2,
     fill: "rgba(255,255,255,.34)", "font-size": 28, "font-weight": 800,
     "text-anchor": "middle", "dominant-baseline": "middle",
-    transform: `rotate(90 ${FIELD.x + FIELD.w + EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
+    transform: viewPortrait ? `rotate(90 ${FIELD.x + FIELD.w + EZ_W / 2} ${FIELD.y + FIELD.h / 2})` : `rotate(90 ${FIELD.x + FIELD.w + EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
   ez2.textContent = "END ZONE";
 
@@ -967,11 +972,13 @@ function drawField() {
       const t1 = el("text", {
         x: x, y: FIELD.y + 32, fill: "rgba(255,255,255,.42)",
         "font-size": 22, "font-weight": 800, "text-anchor": "middle",
+        transform: txtRot(x, FIELD.y + 32)
       }, g);
       t1.textContent = yd;
       const t2 = el("text", {
         x: x, y: FIELD.y + FIELD.h - 16, fill: "rgba(255,255,255,.42)",
         "font-size": 22, "font-weight": 800, "text-anchor": "middle",
+        transform: txtRot(x, FIELD.y + FIELD.h - 16)
       }, g);
       t2.textContent = yd;
     }
@@ -1003,6 +1010,7 @@ function drawField() {
   const losT = el("text", {
     x: losX, y: FIELD.y - 13, fill: "#ffe66b",
     "font-size": 14, "font-weight": 800, "text-anchor": "middle",
+    transform: txtRot(losX, FIELD.y - 13)
   }, g);
   losT.textContent = "LOS 开球线";
 
@@ -1015,6 +1023,7 @@ function drawField() {
   const fdT = el("text", {
     x: fdX, y: FIELD.y - 13, fill: "#7ee0ff",
     "font-size": 14, "font-weight": 800, "text-anchor": "middle",
+    transform: txtRot(fdX, FIELD.y - 13)
   }, g);
   fdT.textContent = "FIRST DOWN";
 
@@ -1985,6 +1994,7 @@ function render() {
     const numStr = String(p.num);
     const t = el("text", {
       x: p.x, y: p.y + 4.2,
+      transform: txtRot(p.x, p.y + 4.2),
       "text-anchor": "middle", "font-size": numStr.length >= 4 ? 9.5 : numStr.length === 3 ? 11 : 12.5,
       fill: isOff ? COLORS.offText : COLORS.defText
     }, g);
