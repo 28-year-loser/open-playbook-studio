@@ -879,45 +879,47 @@ function drawField() {
   // 外底色
   el("rect", { x: 0, y: 0, width: W, height: H, fill: "#0c1a12" }, g);
 
-  // 端区
+  // 达阵区：队徽藏青（对比色，与绿色主场地区分且协调），描边过渡到场地绿
+  const EZ_FILL = "#1c3f6e", EZ_STROKE = "#2a5c92";
   el("rect", {
     x: FIELD.x - EZ_W, y: FIELD.y, width: EZ_W, height: FIELD.h,
-    fill: "#1a5c33", stroke: "#2a7a46", "stroke-width": 1
+    fill: EZ_FILL, stroke: EZ_STROKE, "stroke-width": 1
   }, g);
   el("rect", {
     x: FIELD.x + FIELD.w, y: FIELD.y, width: EZ_W, height: FIELD.h,
-    fill: "#1a5c33", stroke: "#2a7a46", "stroke-width": 1
+    fill: EZ_FILL, stroke: EZ_STROKE, "stroke-width": 1
   }, g);
   // 端区文字
   const ez1 = el("text", {
     x: FIELD.x - EZ_W / 2, y: FIELD.y + FIELD.h / 2,
-    fill: "rgba(255,255,255,.20)", "font-size": 26, "font-weight": 800,
+    fill: "rgba(222,185,88,.42)", "font-size": 26, "font-weight": 800,
     "text-anchor": "middle", "dominant-baseline": "middle",
     transform: `rotate(-90 ${FIELD.x - EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
   ez1.textContent = "END ZONE";
   const ez2 = el("text", {
     x: FIELD.x + FIELD.w + EZ_W / 2, y: FIELD.y + FIELD.h / 2,
-    fill: "rgba(255,255,255,.20)", "font-size": 26, "font-weight": 800,
+    fill: "rgba(222,185,88,.42)", "font-size": 26, "font-weight": 800,
     "text-anchor": "middle", "dominant-baseline": "middle",
     transform: `rotate(90 ${FIELD.x + FIELD.w + EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
   ez2.textContent = "END ZONE";
 
-  // 草坪主体
-  el("rect", {
-    x: FIELD.x, y: FIELD.y, width: FIELD.w, height: FIELD.h,
-    fill: "#1f6b3a", stroke: "#3a8c56", "stroke-width": 2
-  }, g);
-
-  // 草坪条纹（每 10 码）
-  for (let i = 0; i < 5; i++) {
+  // 主场地：每 5 码一个色块，深绿/浅绿交替（20 块，等宽平直边界）
+  const STRIPE_LIGHT = "#2e8a52", STRIPE_DARK = "#26703f";
+  const bandW = FIELD.w / 20;
+  for (let i = 0; i < 20; i++) {
     el("rect", {
-      x: FIELD.x + i * (FIELD.w / 5), y: FIELD.y,
-      width: FIELD.w / 10, height: FIELD.h,
-      fill: "rgba(255,255,255,0.045)"
+      x: FIELD.x + i * bandW, y: FIELD.y,
+      width: bandW, height: FIELD.h,
+      fill: i % 2 === 0 ? STRIPE_LIGHT : STRIPE_DARK
     }, g);
   }
+  // 场地外框
+  el("rect", {
+    x: FIELD.x, y: FIELD.y, width: FIELD.w, height: FIELD.h,
+    fill: "none", stroke: "#3a8c56", "stroke-width": 2
+  }, g);
 
   // 码线（每 10 码一根，共 100 码 → 11 根）
   for (let i = 0; i <= 10; i++) {
@@ -2015,28 +2017,28 @@ function smoothPathD(pts, tension) {
 //  坐标约定：+x = 进攻方向（向右）；y 正 = 内侧（向中路），y 负 = 外侧（向边线）
 //  buildTreeRoute 会按球员所在的半场自动翻转 y，保证内/外侧正确
 // ============================================================
-// 码数标准：7.36 单位 = 1 码（Basic Route Tree 对齐）
+// 码数标准：8.6 单位 = 1 码（网页版端区在场地外侧，FIELD.w=860=100 码；Basic Route Tree 对齐）
 // 每条路线只保留必要折点：Post/Corner=10 码线单折点后 45° 直插端区；
 // Curl/Comeback=10 码线折、7 码线接球；In/Out=10 码线 90° 折；Flat/Slant=3 码线折；Go 无折点
 const ROUTE_TREE = [
-  { name: "Go / Fly 直飞", note: "垂直直插到底线，甩开盯防",
-   pts: [[0,0],[190,0]] },
-  { name: "Slant 斜插", note: "3 码线折，内侧 45° 切入",
-   pts: [[0,0],[22,0],[107,85]] },
-  { name: "Out 外切", note: "10 码线折，90° 向边线切出",
-   pts: [[0,0],[74,0],[74,-85]] },
-  { name: "In / Dig 内切", note: "10 码线折，90° 向中路切入",
-   pts: [[0,0],[74,0],[74,85]] },
-  { name: "Corner 外侧斜上", note: "10 码线单折点，45° 直插身后",
-   pts: [[0,0],[74,0],[184,-110]] },
-  { name: "Post 内侧斜上", note: "10 码线单折点，45° 直插端区",
-   pts: [[0,0],[74,0],[184,110]] },
-  { name: "Curl 急停回身", note: "10 码线折，7 码线回身接球",
-   pts: [[0,0],[74,0],[51.5,-12]] },
-  { name: "Comeback 回跑", note: "10 码线折，7 码线回跑接球",
-   pts: [[0,0],[74,0],[51.5,-22.5]] },
   { name: "Flat 平出", note: "3 码线折，向外侧平出",
-   pts: [[0,0],[22,0],[30,-85]] }
+   pts: [[0,0],[25.8,0],[34,-85]] },
+  { name: "Slant 斜插", note: "3 码线折，内侧 45° 切入",
+   pts: [[0,0],[25.8,0],[110,84]] },
+  { name: "Comeback 回跑", note: "10 码线折，7 码线回跑接球",
+   pts: [[0,0],[86,0],[60.2,-26]] },
+  { name: "Curl 急停回身", note: "10 码线折，7 码线回身接球",
+   pts: [[0,0],[86,0],[60.2,-14]] },
+  { name: "Out 外切", note: "10 码线折，90° 向边线切出",
+   pts: [[0,0],[86,0],[86,-85]] },
+  { name: "In / Dig 内切", note: "10 码线折，90° 向中路切入",
+   pts: [[0,0],[86,0],[86,85]] },
+  { name: "Corner 外侧斜上", note: "10 码线单折点，45° 直插身后",
+   pts: [[0,0],[86,0],[186,-100]] },
+  { name: "Post 内侧斜上", note: "10 码线单折点，45° 直插端区",
+   pts: [[0,0],[86,0],[186,100]] },
+  { name: "Go / Fly 直飞", note: "垂直直插到底线，甩开盯防",
+   pts: [[0,0],[222,0]] }
 ];
 
 // 以球员为起点生成路线。mirror=进攻方向反向（防守/右半场）；type=run|pass
