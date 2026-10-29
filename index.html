@@ -261,6 +261,16 @@ footer{
 .modal-actions .primary{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:700}
 .modal-actions .primary:hover{background:#63b3ff}
 #nmErr{min-height:18px;margin:6px 0 2px;font-size:12px;color:#ff7b72}
+/* 战术演练 */
+#rehBar{background:#1a222c;border:1px solid #2b3a4a;border-radius:10px;margin:8px 10px 0;padding:9px 12px}
+.reh-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.reh-title{font-size:12.5px;font-weight:800;color:#63b3ff;margin-right:2px}
+.reh-btn{border:1px solid #35485c;background:#223041;color:#dbe6f0;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.reh-btn.main{background:#2f7ed8;border-color:#2f7ed8;color:#fff}
+.reh-btn.danger{color:#ff9f92;border-color:#7a3a44;background:#40222a}
+.reh-slider{display:flex;align-items:center;gap:5px;font-size:11px;color:#8fb3cc}
+.reh-slider input{width:90px;accent-color:#2f7ed8}
+.reh-sub{margin-top:6px;font-size:11px;color:#7d92a6}
 #nmSide button{flex:1;padding:8px;border-radius:8px;cursor:pointer}
 #nmSide button.on{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:700}
 
@@ -464,6 +474,7 @@ aside::-webkit-scrollbar-corner,
   <button id="btnUndo" title="撤销 (Ctrl+Z)">⟲ 撤销</button>
   <button id="btnRedo" title="重做 (Ctrl+Y)">⟳ 重做</button>
   <div class="sep"></div>
+  <button id="btnRehearse">🎬 演练</button>
   <button id="btnAddPlayer">＋ 添加球员</button>
   <button id="btnClear">清空路线</button>
   <button id="btnReset" class="warn">重置战术</button>
@@ -602,6 +613,18 @@ aside::-webkit-scrollbar-corner,
 </main>
 
 <footer>
+  <div id="rehBar" style="display:none">
+    <div class="reh-row">
+      <span class="reh-title">🎬 战术演练</span>
+      <button class="reh-btn main" id="rehPlay">▶ 播放</button>
+      <button class="reh-btn" id="rehReset">⟲ 重播</button>
+      <button class="reh-btn" id="rehBalls">🏈 球 <span id="rehBallCount">0</span></button>
+      <label class="reh-slider">攻速<input type="range" id="rehSpeedOff" min="40" max="260" value="90"></label>
+      <label class="reh-slider">守速<input type="range" id="rehSpeedDef" min="40" max="260" value="80"></label>
+      <button class="reh-btn danger" id="rehExit">✕ 退出演练</button>
+    </div>
+    <div class="reh-sub" id="rehHint">点「🏈 球」选择 QB 与传球目标 / 持球人，然后 ▶ 播放；带 Zone 的防守人等球进区才动</div>
+  </div>
   <div id="status">就绪 — 选择阵型开始绘制战术</div>
   <div class="pill ok">本地运行 · 无需联网</div>
   <div class="pill" id="pillFormat">11 人制</div>
@@ -662,6 +685,21 @@ aside::-webkit-scrollbar-corner,
     <div class="modal-actions">
       <button id="fmCancel">取消</button>
       <button id="fmOk" class="primary">创建阵型</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="ballModal">
+  <div class="modal-card">
+    <div class="modal-title">🏈 橄榄球对象</div>
+    <div class="modal-sub">点按传球球可切换出手时机（30%/50%/70%/90%）；删除点行内 🗑</div>
+    <div id="ballList"></div>
+    <div class="row" style="margin-top:12px;gap:8px">
+      <button class="btn primary" style="flex:1" id="ballAddPass">🎯 传球球（选 QB 与目标）</button>
+      <button class="btn" style="flex:1" id="ballAddCarry">🏃 携带球（选持球人）</button>
+    </div>
+    <div class="modal-actions">
+      <button id="ballClose">关闭</button>
     </div>
   </div>
 </div>
@@ -1943,6 +1981,8 @@ function render() {
 
   // 折点手柄画在最上层（球员之上，避免被圆圈遮挡）
   drawRouteHandles(gP);
+  // 战术演练橄榄球（最上层）
+  drawRehBalls(gP);
 }
 
 // ============================================================
@@ -2123,6 +2163,284 @@ function drawRoute(g, r, isDraft) {
     cx: r.pts[0].x, cy: r.pts[0].y, r: 3.4,
     fill: color, opacity: .8
   }, g);
+}
+
+
+// ===================== 战术演练引擎（与大众版同源） =====================
+function rehPickRoutes(st) {
+  const map = {};
+  (st.routes || []).forEach(r => {
+    if (!r.player || !r.pts || r.pts.length < 2) return;
+    const k = String(r.player);
+    if (map[k]) return;
+    const pts = r.pts.map(p => ({ x: p.x, y: p.y }));
+    let total = 0;
+    for (let i = 1; i < pts.length; i++)
+      total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    map[k] = { pts, total, type: r.type };
+  });
+  return map;
+}
+function rehPickZonePlayers(st) {
+  const out = [];
+  (st.zones || []).forEach(z => {
+    if (z.player == null) return;
+    const p = st.players.find(x => String(x.id) === String(z.player));
+    if (!p) return;
+    out.push({ playerId: p.id, zone: z, triggered: false, targetBall: null });
+  });
+  return out;
+}
+function createRehearsal(st) {
+  return {
+    playing: false, t: 0, done: false,
+    speedOff: 90, speedDef: 80, ballSpeed: 320,
+    balls: [], routes: rehPickRoutes(st), zones: rehPickZonePlayers(st),
+    progress: {}, live: {}
+  };
+}
+function rehAddPassBall(reh, fromId, toId, opts) {
+  opts = opts || {};
+  const b = {
+    id: "b-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 100),
+    mode: "pass", fromId: fromId, toId: toId,
+    releaseAt: opts.releaseAt == null ? 0.5 : opts.releaseAt,
+    t: 0, launched: false, launchFrom: null, pos: null
+  };
+  reh.balls.push(b);
+  return b;
+}
+function rehAddCarryBall(reh, carrierId) {
+  const b = {
+    id: "b-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 100),
+    mode: "carry", carrierId: carrierId, pos: null
+  };
+  reh.balls.push(b);
+  return b;
+}
+function rehRemoveBall(reh, id) {
+  reh.balls = reh.balls.filter(b => String(b.id) !== String(id));
+}
+function rehReset(reh) {
+  reh.t = 0; reh.done = false;
+  reh.zones.forEach(z => { z.triggered = false; z.targetBall = null; });
+  Object.keys(reh.progress).forEach(k => delete reh.progress[k]);
+  reh.balls.forEach(b => { b.t = 0; b.launched = false; b.launchFrom = null; b.pos = null; });
+}
+function rehPosAlong(route, walked) {
+  const pts = route.pts;
+  let d = Math.max(0, Math.min(walked, route.total));
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (d <= seg) {
+      const t = seg < 1e-6 ? 0 : d / seg;
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t };
+    }
+    d -= seg;
+  }
+  return { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y };
+}
+function ballInsideZone(pos, z) {
+  if (!pos) return false;
+  if (z.shape === "circle") {
+    return Math.hypot((pos.x - z.cx) / (z.rx || 1), (pos.y - z.cy) / (z.ry || 1)) <= 1;
+  }
+  const x0 = Math.min(z.x, z.x + z.w), x1 = Math.max(z.x, z.x + z.w);
+  const y0 = Math.min(z.y, z.y + z.h), y1 = Math.max(z.y, z.y + z.h);
+  return pos.x >= x0 && pos.x <= x1 && pos.y >= y0 && pos.y <= y1;
+}
+function rehChase(from, to, speed, dt) {
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1e-6 || dist <= speed * dt) return { x: to.x, y: to.y };
+  return { x: from.x + dx / dist * speed * dt, y: from.y + dy / dist * speed * dt };
+}
+function rehStep(reh, st, dt) {
+  if (!reh.playing || reh.done) return;
+  reh.t += dt;
+  const zg = {};
+  reh.zones.forEach(z => { zg[String(z.playerId)] = z; });
+  st.players.forEach(p => {
+    const k = String(p.id);
+    const route = reh.routes[k];
+    const g = zg[k];
+    if (!route) return;
+    if (g && !g.triggered) return;
+    const speed = p.side === "off" ? reh.speedOff : reh.speedDef;
+    reh.progress[k] = (reh.progress[k] || 0) + speed * dt;
+    const np = rehPosAlong(route, reh.progress[k]);
+    p.x = np.x; p.y = np.y;
+    if (reh.progress[k] >= route.total) reh.progress[k] = route.total;
+  });
+  st.players.forEach(p => { reh.live[String(p.id)] = { x: p.x, y: p.y }; });
+  reh.balls.forEach(b => {
+    if (b.mode === "pass") {
+      const fromP = reh.live[String(b.fromId)];
+      const toP = reh.live[String(b.toId)];
+      if (!fromP || !toP) return;
+      const prog = reh.progress[String(b.fromId)] || 0;
+      const total = (reh.routes[String(b.fromId)] || { total: 1 }).total || 1;
+      if (!b.launched && prog / total >= b.releaseAt) {
+        b.launched = true;
+        b.launchFrom = { x: fromP.x, y: fromP.y };
+      }
+      if (b.launched) {
+        if (!b.launchFrom) b.launchFrom = { x: fromP.x, y: fromP.y };
+        const dist = Math.max(1, Math.hypot(toP.x - b.launchFrom.x, toP.y - b.launchFrom.y));
+        b.t = Math.min(1, b.t + (reh.ballSpeed * dt) / dist);
+        b.pos = { x: b.launchFrom.x + (toP.x - b.launchFrom.x) * b.t, y: b.launchFrom.y + (toP.y - b.launchFrom.y) * b.t };
+        if (b.t >= 1) { b.mode = "carry"; b.carrierId = b.toId; }
+      } else {
+        b.pos = { x: fromP.x, y: fromP.y };
+      }
+    } else if (b.mode === "carry") {
+      const p = reh.live[String(b.carrierId)];
+      if (p) b.pos = { x: p.x, y: p.y };
+    }
+  });
+  reh.zones.forEach(z => {
+    if (z.triggered) {
+      const ball = z.targetBall && z.targetBall.pos ? z.targetBall : reh.balls.find(b => b.pos);
+      if (ball && ball.pos) {
+        const p = st.players.find(x => String(x.id) === String(z.playerId));
+        if (p) {
+          const np = rehChase({ x: p.x, y: p.y }, ball.pos, reh.speedDef, dt);
+          p.x = np.x; p.y = np.y;
+          reh.live[String(z.playerId)] = { x: p.x, y: p.y };
+        }
+      }
+      return;
+    }
+    for (let i = 0; i < reh.balls.length; i++) {
+      if (ballInsideZone(reh.balls[i].pos, z.zone)) {
+        z.triggered = true;
+        z.targetBall = reh.balls[i];
+        break;
+      }
+    }
+  });
+  let allDone = true;
+  Object.keys(reh.routes).forEach(k => {
+    if (zg[k] && !zg[k].triggered) return;
+    if ((reh.progress[k] || 0) < reh.routes[k].total - 0.5) allDone = false;
+  });
+  reh.balls.forEach(b => { if (b.mode === "pass" && b.t < 1) allDone = false; });
+  if (allDone) { reh.done = true; reh.playing = false; }
+}
+
+// ===================== 演练 UI（网页版） =====================
+let reh = null, rehPickMode = null, rehBase = null, rehLastTs = 0, rehRaf = 0;
+
+function drawRehBalls(gP) {
+  if (!reh) return;
+  reh.balls.forEach(b => {
+    if (!b.pos) return;
+    const g = el("g", {}, gP);
+    el("ellipse", {
+      cx: b.pos.x, cy: b.pos.y, rx: 9, ry: 6.5,
+      fill: "#a5642e", stroke: "#fff", "stroke-width": 1.6
+    }, g);
+    el("line", {
+      x1: b.pos.x - 3.5, y1: b.pos.y, x2: b.pos.x + 3.5, y2: b.pos.y,
+      stroke: "#fff", "stroke-width": 1.3
+    }, g);
+  });
+}
+
+function enterRehearsal() {
+  if (state.drawing || state.zoneDraft) { toast("请先完成当前绘制"); return; }
+  reh = createRehearsal(state);
+  rehBase = state.players.map(p => ({ id: p.id, x: p.x, y: p.y }));
+  $("#rehBar").style.display = "";
+  updateRehBallCount();
+  $("#status").innerHTML = "<b>战术演练</b> — 点「🏈 球」选择 QB 与传球目标，▶ 播放";
+  rehLastTs = 0;
+  const tick = (ts) => {
+    if (!reh) return;
+    if (reh.playing) {
+      const dt = Math.min(0.06, rehLastTs ? (ts - rehLastTs) / 1000 : 0.016);
+      rehStep(reh, state, dt);
+      render();
+      if (reh.done) {
+        reh.playing = false;
+        $("#rehPlay").textContent = "▶ 播放";
+        $("#status").innerHTML = "<b>演练完成</b> — 「⟲ 重播」再来，或「✕ 退出演练」";
+      }
+    }
+    rehLastTs = ts;
+    rehRaf = requestAnimationFrame(tick);
+  };
+  rehRaf = requestAnimationFrame(tick);
+  toast("已进入战术演练");
+}
+
+function exitRehearsal() {
+  reh = null; rehPickMode = null;
+  cancelAnimationFrame(rehRaf);
+  $("#rehBar").style.display = "none";
+  $("#ballModal").classList.remove("show");
+  if (rehBase) {
+    rehBase.forEach(b => {
+      const p = state.players.find(x => String(x.id) === String(b.id));
+      if (p) { p.x = b.x; p.y = b.y; }
+    });
+    rehBase = null;
+  }
+  render();
+  $("#status").innerHTML = "就绪 — 选择阵型开始绘制战术";
+  toast("已退出演练，站位已还原");
+}
+
+function updateRehBallCount() {
+  $("#rehBallCount").textContent = reh ? reh.balls.length : 0;
+}
+
+function renderBallList() {
+  const rows = (reh ? reh.balls : []).map(b => {
+    const nameOf = id => {
+      const p = state.players.find(x => String(x.id) === String(id));
+      return p ? p.num : "?";
+    };
+    const desc = b.mode === "pass"
+      ? `🏈 传球 ${nameOf(b.fromId)} → ${nameOf(b.toId)} · 出手 ${(b.releaseAt * 100) | 0}%`
+      : `🏈 携带 ${nameOf(b.carrierId)}`;
+    return `<div class="item" style="display:flex;align-items:center;gap:8px;background:#223041;border:1px solid #35485c;border-radius:8px;padding:9px 11px;margin-bottom:7px;cursor:pointer" data-bcycle="${b.id}">
+      <span style="flex:1">${desc}</span>
+      <span class="btn warn" data-bdel="${b.id}" style="padding:4px 9px">🗑</span>
+    </div>`;
+  }).join("");
+  $("#ballList").innerHTML = rows || '<div style="color:#7d92a6;text-align:center;padding:14px">还没有球——用下方按钮添加</div>';
+}
+
+function handlePickTap(p) {
+  if (!reh) return;
+  if (rehPickMode === "carry") {
+    rehAddCarryBall(reh, p.id);
+    rehPickMode = null;
+    updateRehBallCount();
+    $("#ballModal").classList.add("show");
+    renderBallList();
+    toast("携带球：" + p.num);
+    return;
+  }
+  if (rehPickMode === "pass1") {
+    reh._pickFrom = p.id;
+    rehPickMode = "pass2";
+    toast("QB=" + p.num + "，请点击接球目标");
+    $("#status").innerHTML = "<b>传球球</b> — 再点「接球目标」（传球给谁）";
+    return;
+  }
+  if (rehPickMode === "pass2") {
+    if (reh._pickFrom == null) return;
+    rehAddPassBall(reh, reh._pickFrom, p.id, { releaseAt: 0.5 });
+    reh._pickFrom = null;
+    rehPickMode = null;
+    updateRehBallCount();
+    $("#ballModal").classList.add("show");
+    renderBallList();
+    toast("传球目标：" + p.num);
+    $("#status").innerHTML = "<b>战术演练</b> — 点「🏈 球」管理，▶ 播放";
+  }
 }
 
 // ============================================================
@@ -2939,6 +3257,8 @@ let ptDrag = null;
 let zDrag = null;
 
 function startDrag(e, p) {
+  // 战术演练模式：点按=选择 QB / 传球目标 / 持球人，不拖动
+  if (reh) { if (rehPickMode) handlePickTap(p); return; }
   // 区域绘制/路线绘制进行中：不劫持球员点击（冒泡给画布处理画区域/加折点）
   if (state.zoneDraft || state.drawing) return;
   if (e.button === 2) return; // 右键不开启拖拽/画线，冒泡给 contextmenu 收尾路线
@@ -2989,6 +3309,8 @@ function startDrag(e, p) {
 }
 
 $("#board").addEventListener("pointerdown", e => {
+  // 战术演练模式：画布不参与画线/区域/折点
+  if (reh) return;
   // 折点手柄拖动
   const handle = e.target.closest && e.target.closest(".route-handle");
   if (handle) {
@@ -3539,6 +3861,65 @@ function nmSubmit() {
     toast(`已添加${nmSide === "def" ? "防守" : "进攻"}球员「${s}」`);
   }
 }
+$("#btnRehearse").onclick = () => enterRehearsal();
+$("#rehPlay").onclick = () => {
+  if (!reh) return;
+  if (reh.done) rehReset(reh);
+  reh.playing = !reh.playing;
+  $("#rehPlay").textContent = reh.playing ? "⏸ 暂停" : "▶ 播放";
+};
+$("#rehReset").onclick = () => {
+  if (!reh) return;
+  if (rehBase) rehBase.forEach(b => {
+    const p = state.players.find(x => String(x.id) === String(b.id));
+    if (p) { p.x = b.x; p.y = b.y; }
+  });
+  rehReset(reh);
+  reh.playing = true;
+  $("#rehPlay").textContent = "⏸ 暂停";
+  render();
+};
+$("#rehBalls").onclick = () => {
+  if (!reh) return;
+  renderBallList();
+  $("#ballModal").classList.add("show");
+};
+$("#rehExit").onclick = () => exitRehearsal();
+$("#rehSpeedOff").addEventListener("input", e => { if (reh) reh.speedOff = parseFloat(e.target.value); });
+$("#rehSpeedDef").addEventListener("input", e => { if (reh) reh.speedDef = parseFloat(e.target.value); });
+$("#ballClose").onclick = () => $("#ballModal").classList.remove("show");
+$("#ballAddPass").onclick = () => {
+  $("#ballModal").classList.remove("show");
+  rehPickMode = "pass1";
+  $("#status").innerHTML = "<b>传球球</b> — 先点「四分卫 QB」(持球人)";
+  toast("请点选 QB");
+};
+$("#ballAddCarry").onclick = () => {
+  $("#ballModal").classList.remove("show");
+  rehPickMode = "carry";
+  $("#status").innerHTML = "<b>携带球</b> — 点选持球球员";
+  toast("请点选持球人");
+};
+$("#ballList").addEventListener("click", e => {
+  const del = e.target.closest("[data-bdel]");
+  if (del && reh) {
+    rehRemoveBall(reh, del.dataset.bdel);
+    updateRehBallCount();
+    renderBallList();
+    return;
+  }
+  const cyc = e.target.closest("[data-bcycle]");
+  if (cyc && reh) {
+    const b = reh.balls.find(x => String(x.id) === String(cyc.dataset.bcycle));
+    if (b && b.mode === "pass") {
+      const seq = [0.3, 0.5, 0.7, 0.9];
+      b.releaseAt = seq[(seq.indexOf(b.releaseAt) + 1) % seq.length] || 0.5;
+      toast("出手时机 " + ((b.releaseAt * 100) | 0) + "%");
+      renderBallList();
+    }
+  }
+});
+
 $("#btnAddPlayer").onclick = () => openNameDialog("add", null);
 $("#nmCancel").onclick = () => $("#nameModal").classList.remove("show");
 $("#nmOk").onclick = nmSubmit;
