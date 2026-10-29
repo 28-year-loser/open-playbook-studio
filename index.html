@@ -2033,6 +2033,28 @@ function routeEndAngle(pathEl, pts, isBlock) {
   return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
 }
 
+// 末端裁剪：线段终止于标识起沿（箭尾/圆边/T 杆），标识尖端=路线终点
+// 沿末端方向回缩 depth（Catmull-Rom 末端切线=末段弦向，弦向回缩即精确）
+function trimEndPts(pts, depth) {
+  if (!depth || !pts || pts.length < 2) return pts;
+  let out = pts.map(p => ({ x: p.x, y: p.y }));
+  let need = depth;
+  while (need > 0 && out.length >= 2) {
+    const a = out[out.length - 2], b = out[out.length - 1];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (seg <= 1e-6) { out.pop(); continue; }
+    if (seg > need) {
+      const t = need / seg;
+      out[out.length - 1] = { x: b.x + (a.x - b.x) * t, y: b.y + (a.y - b.y) * t };
+      need = 0;
+    } else {
+      out.pop();
+      need -= seg;
+    }
+  }
+  return out;
+}
+
 function drawRoute(g, r, isDraft) {
   if (!r.pts || r.pts.length < 1) return;
   // 预览点（r.preview）仅在草稿时追加到路径末端，不并入已定折点，避免重复点
@@ -2041,10 +2063,13 @@ function drawRoute(g, r, isDraft) {
   const dash = r.type === "run" ? "8 6" : r.type === "block" ? "2 5" : "none";
   const isBlock = r.type === "block";
 
+  // 末端标识深度：箭头 13 / 跑动圆 7.2 / T 杆 0——线尾收到标识起沿
+  const trimLen = r.type === "pass" ? 13 : r.type === "run" ? 7.2 : 0;
+  const linePts = pts.length >= 2 ? trimEndPts(pts, trimLen) : pts;
   // 跑动/传球走弧线（Catmull-Rom 平滑），阻挡保持直线
-  const d = isBlock
-    ? pts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")
-    : smoothPathD(pts, 0.5);
+  const d = (linePts.length < 2) ? "" : (isBlock
+    ? linePts.map((p, i) => (i === 0 ? "M" : "L") + p.x + " " + p.y).join(" ")
+    : smoothPathD(linePts, 0.5));
 
   // 加宽的透明命中区
   el("path", {
