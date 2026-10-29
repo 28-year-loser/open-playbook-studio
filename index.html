@@ -100,12 +100,17 @@ kbd{
 }
 
 /* ===== 画布区 ===== */
-#stage{flex:1;display:flex;align-items:center;justify-content:center;padding:18px;min-width:0;overflow:auto}
+#stage{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;min-width:0;overflow:auto;background:#0c1218}
 #board-wrap{
   position:relative; width:100%; max-width:1100px;
   box-shadow:0 10px 36px rgba(0,0,0,.42); border-radius:12px; overflow:hidden;
+  background:#0c1a12;
 }
-#board{display:block;width:100%;height:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+#board{display:block;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.tool-sel{
+  background:#223041;border:1px solid #35485c;border-radius:8px;color:#e8eef4;
+  padding:6px 8px;font-size:12px;cursor:pointer;
+}
 
 /* 球员气泡 */
 .player{cursor:grab}
@@ -474,6 +479,15 @@ aside::-webkit-scrollbar-corner,
   <button id="btnUndo" title="撤销 (Ctrl+Z)">⟲ 撤销</button>
   <button id="btnRedo" title="重做 (Ctrl+Y)">⟳ 重做</button>
   <div class="sep"></div>
+  <select id="frameRatio" class="tool-sel" title="画面比例">
+    <option value="auto">比例·跟随内容</option>
+    <option value="16:9">16:9</option>
+    <option value="4:3">4:3</option>
+    <option value="1:1">1:1</option>
+    <option value="3:4">3:4</option>
+    <option value="9:16">9:16</option>
+  </select>
+  <button id="frameOrient" title="画面方向：横屏/竖屏">🖥 横屏</button>
   <button id="btnFitView" title="视图适应战术内容">⤢ 适应</button>
   <button id="btnZoomIn" title="放大">🔍＋</button>
   <button id="btnZoomOut" title="缩小">🔍－</button>
@@ -2218,18 +2232,57 @@ function applyViewBox() {
     `${viewBox.x.toFixed(1)} ${viewBox.y.toFixed(1)} ${viewBox.w.toFixed(1)} ${viewBox.h.toFixed(1)}`);
 }
 
-function fitViewToContent() {
-  const b = contentBBox();
-  const ratio = 1000 / 560;
-  let w = b.w, h = b.h;
-  if (w / h > ratio) h = w / ratio; else w = h * ratio;
-  viewBox = { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
-  applyViewBox();
-  toast("视图已适应战术内容");
+
+// ============================================================
+//  画面框：比例（16:9/4:3/1:1/3:4/9:16）+ 方向（横/竖屏）
+//  框按比例适配可视区域（去白边、内容完全填满）；viewBox 同比例 → 不拉伸
+// ============================================================
+let frame = { ratio: 0, vertical: false };   // ratio: 0=跟随内容
+
+function parseRatio(v) {
+  if (!v || v === "auto") return 0;
+  const p = v.split(":");
+  return parseFloat(p[0]) / parseFloat(p[1]);
+}
+function frameRatioValue() {
+  if (!frame.ratio) return 0;
+  return frame.vertical ? 1 / frame.ratio : frame.ratio;
 }
 
+function fitViewToContent(ratio) {
+  const b = contentBBox();
+  const R = ratio || (b.w / b.h) || (1000 / 560);
+  let w = b.w, h = b.h;
+  if (w / h > R) h = w / R; else w = h * R;
+  viewBox = { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
+  applyViewBox();
+}
+
+function applyFrame() {
+  const stage = $("#stage"), wrap = $("#board-wrap");
+  const availW = Math.max(240, stage.clientWidth - 28);
+  const availH = Math.max(200, stage.clientHeight - 28);
+  let ratio = frameRatioValue();
+  if (!ratio) {
+    const b = contentBBox();
+    ratio = b.w / b.h;
+  }
+  let w = availW, h = w / ratio;
+  if (h > availH) { h = availH; w = h * ratio; }
+  wrap.style.width = Math.round(w) + "px";
+  wrap.style.maxWidth = "none";
+  wrap.style.height = Math.round(h) + "px";
+  fitViewToContent(ratio);
+}
+
+
+// （fitViewToContent 由下方画面框系统统一提供）
+
 function resetView() {
-  viewBox = { ...VIEW_FULL };
+  const ratio = frameRatioValue() || (1000 / 560);
+  let w = 1000, h = 560;
+  if (w / h < ratio) w = h * ratio; else h = w / ratio;   // 包含整个场地
+  viewBox = { x: 500 - w / 2, y: 280 - h / 2, w, h };
   applyViewBox();
   toast("已全览球场");
 }
@@ -2238,8 +2291,8 @@ function zoomView(factor, cx, cy) {
   const b = viewBox;
   const cxv = cx == null ? b.x + b.w / 2 : cx;
   const cyv = cy == null ? b.y + b.h / 2 : cy;
-  const nw = Math.min(1200, Math.max(180, b.w * factor));
-  const nh = nw * (560 / 1000);
+  const nw = Math.min(1600, Math.max(160, b.w * factor));
+  const nh = nw * (b.h / b.w);   // 保持当前画面比例（不拉伸）
   viewBox = {
     x: cxv - (cxv - b.x) * (nw / b.w),
     y: cyv - (cyv - b.y) * (nh / b.h),
@@ -4008,7 +4061,19 @@ function nmSubmit() {
     toast(`已添加${nmSide === "def" ? "防守" : "进攻"}球员「${s}」`);
   }
 }
-$("#btnFitView").onclick = () => fitViewToContent();
+$("#btnFitView").onclick = () => { applyFrame(); toast("视图已适应画面框"); };
+$("#frameRatio").addEventListener("change", e => {
+  frame.ratio = parseRatio(e.target.value);
+  applyFrame();
+  toast("画面比例：" + e.target.options[e.target.selectedIndex].text);
+});
+$("#frameOrient").onclick = () => {
+  frame.vertical = !frame.vertical;
+  $("#frameOrient").textContent = frame.vertical ? "📱 竖屏" : "🖥 横屏";
+  applyFrame();
+  toast(frame.vertical ? "画面方向：竖屏" : "画面方向：横屏");
+};
+window.addEventListener("resize", () => applyFrame());
 $("#btnFullView").onclick = () => resetView();
 $("#btnZoomIn").onclick = () => zoomView(0.8);
 $("#btnZoomOut").onclick = () => zoomView(1.25);
@@ -4364,6 +4429,7 @@ function boot() {
   updateButtons();
   updateStats();
   refreshSelPanel();
+  if (typeof applyFrame === "function") applyFrame();
   renderPlayList();
   $("#status").innerHTML =
     "就绪 — <b>拖动</b>球员调整站位；选 <b>R/P/B</b> 画路线（点球员→点折点→双击收尾）";
