@@ -1828,6 +1828,8 @@ function applyFormation(form, side, skipUndo) {
     return;
   }
   if (!skipUndo) pushUndo();
+  // 战术名称跟随阵型名称
+  if (form.name) $("#playName").value = form.name;
   // 记录当前套用的模板快照（重置战术时按此恢复）
   state.tpl[side] = {
     name: form.name || "",
