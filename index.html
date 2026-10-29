@@ -879,27 +879,29 @@ function drawField() {
   // 外底色
   el("rect", { x: 0, y: 0, width: W, height: H, fill: "#0c1a12" }, g);
 
-  // 达阵区：队徽藏青（对比色，与绿色主场地区分且协调），描边过渡到场地绿
-  const EZ_FILL = "#1c3f6e", EZ_STROKE = "#2a5c92";
+  // 达阵区：深松绿纵向渐变（比两条纹更深，区分明显且与绿地协调）
+  const ezGrad = el("linearGradient", { id: "ezGrad", x1: 0, y1: 0, x2: 0, y2: 1 }, g);
+  el("stop", { offset: "0%", "stop-color": "#1c5a35" }, ezGrad);
+  el("stop", { offset: "100%", "stop-color": "#0f3a22" }, ezGrad);
   el("rect", {
     x: FIELD.x - EZ_W, y: FIELD.y, width: EZ_W, height: FIELD.h,
-    fill: EZ_FILL, stroke: EZ_STROKE, "stroke-width": 1
+    fill: "url(#ezGrad)", stroke: "rgba(255,255,255,.22)", "stroke-width": 1
   }, g);
   el("rect", {
     x: FIELD.x + FIELD.w, y: FIELD.y, width: EZ_W, height: FIELD.h,
-    fill: EZ_FILL, stroke: EZ_STROKE, "stroke-width": 1
+    fill: "url(#ezGrad)", stroke: "rgba(255,255,255,.22)", "stroke-width": 1
   }, g);
   // 端区文字
   const ez1 = el("text", {
     x: FIELD.x - EZ_W / 2, y: FIELD.y + FIELD.h / 2,
-    fill: "rgba(222,185,88,.42)", "font-size": 26, "font-weight": 800,
+    fill: "rgba(255,255,255,.30)", "font-size": 26, "font-weight": 800,
     "text-anchor": "middle", "dominant-baseline": "middle",
     transform: `rotate(-90 ${FIELD.x - EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
   ez1.textContent = "END ZONE";
   const ez2 = el("text", {
     x: FIELD.x + FIELD.w + EZ_W / 2, y: FIELD.y + FIELD.h / 2,
-    fill: "rgba(222,185,88,.42)", "font-size": 26, "font-weight": 800,
+    fill: "rgba(255,255,255,.30)", "font-size": 26, "font-weight": 800,
     "text-anchor": "middle", "dominant-baseline": "middle",
     transform: `rotate(90 ${FIELD.x + FIELD.w + EZ_W / 2} ${FIELD.y + FIELD.h / 2})`
   }, g);
@@ -2052,7 +2054,7 @@ function buildTreeRoute(form, player, mirror, type) {
     id: state.nextId++,
     side: player ? player.side : state.side,
     type: type || "run",
-    sharp: !!form.sharp,   // 直角折点路线（In/Out）不走平滑
+    sharp: true,   // 标准路线一律锐角直画（直线段保真折角，不平滑）
     pts: form.pts.map(p => ({ x: base.x + p[0] * dirX, y: base.y + p[1] * dirY })),
     player: player ? player.id : null
   };
