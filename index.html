@@ -799,8 +799,32 @@ aside::-webkit-scrollbar-corner,
 // ---------- 常量 ----------
 const SVGNS = "http://www.w3.org/2000/svg";
 const W = 1000, H = 560;
-const FIELD = { x: 70, y: 55, w: 860, h: 450 };   // 比赛区域（不含端区）
-const EZ_W = 62;                                   // 端区宽度
+// ===== 球场标准尺寸（单位：码）=====
+// 11 人制 = NFL：120×53.3 总长宽（含两端 10 码达阵区）
+// 8 人制 = 8-man：80×40（含两端 10 码达阵区）
+// 5 人制 = 腰旗（NFL FLAG）：70×25（含两端 10 码达阵区）
+const FMT_DIMS = {
+  11: { L: 120, W: 53.33, E: 10 },
+  8: { L: 80, W: 40, E: 10 },
+  5: { L: 70, W: 25, E: 10 }
+};
+let FIELD = { x: 70, y: 55, w: 860, h: 450 };   // 比赛区域（不含端区）
+let EZ_W = 62;                                   // 端区宽度
+let UY = 8.6;                                    // 单位/码（随规格缩放）
+
+function applyFormatDims() {
+  const d = FMT_DIMS[state.format] || FMT_DIMS[11];
+  const CW = 1000, CH = 560;   // 画布坐标系
+  const margin = 56;
+  UY = Math.min((CW - margin) / d.L, (CH - margin) / d.W);
+  const totalW = d.L * UY, totalH = d.W * UY;
+  const x0 = (CW - totalW) / 2, y0 = (CH - totalH) / 2;
+  EZ_W = d.E * UY;
+  FIELD.x = x0 + EZ_W;
+  FIELD.y = y0;
+  FIELD.w = (d.L - 2 * d.E) * UY;
+  FIELD.h = totalH;
+}
 const PLAYER_R = 13;
 
 const COLORS = {
@@ -943,10 +967,11 @@ function drawField() {
   }, g);
   ez2.textContent = "END ZONE";
 
-  // 主场地：每 5 码一个色块，深绿/浅绿交替（20 块，等宽平直边界）
+  // 主场地：每 5 码一个色块，深绿/浅绿交替（等宽平直边界）
   const STRIPE_LIGHT = "#2e8a52", STRIPE_DARK = "#26703f";
-  const bandW = FIELD.w / 20;
-  for (let i = 0; i < 20; i++) {
+  const nBands = Math.round(FIELD.w / UY / 5);
+  const bandW = FIELD.w / nBands;
+  for (let i = 0; i < nBands; i++) {
     el("rect", {
       x: FIELD.x + i * bandW, y: FIELD.y,
       width: bandW, height: FIELD.h,
@@ -959,16 +984,17 @@ function drawField() {
     fill: "none", stroke: "#3a8c56", "stroke-width": 2
   }, g);
 
-  // 码线（每 10 码一根，共 100 码 → 11 根）
-  for (let i = 0; i <= 10; i++) {
-    const x = FIELD.x + (i * FIELD.w) / 10;
+  // 码线（每 10 码一根；标注 = 距两端最小码数）
+  const n10 = Math.round(FIELD.w / UY / 10);
+  for (let i = 0; i <= n10; i++) {
+    const x = FIELD.x + (i * FIELD.w) / n10;
     el("line", {
       x1: x, y1: FIELD.y, x2: x, y2: FIELD.y + FIELD.h,
       stroke: "rgba(255,255,255,.42)", "stroke-width": i === 0 || i === 10 ? 2.4 : 1.4
     }, g);
     // 码数标注
-    if (i > 0 && i < 10) {
-      const yd = i <= 5 ? i * 10 : (10 - i) * 10;
+    if (i > 0 && i < n10) {
+      const yd = Math.min(i * 10, n10 * 10 - i * 10);
       const t1 = el("text", {
         x: x, y: FIELD.y + 32, fill: "rgba(255,255,255,.42)",
         "font-size": 22, "font-weight": 800, "text-anchor": "middle",
@@ -985,8 +1011,8 @@ function drawField() {
   }
 
   // 哈希标记（每 5 码一小横，上下各一列）
-  for (let i = 0; i <= 20; i++) {
-    const x = FIELD.x + (i * FIELD.w) / 20;
+  for (let i = 0; i <= nBands; i++) {
+    const x = FIELD.x + (i * FIELD.w) / nBands;
     [FIELD.y + FIELD.h * 0.32, FIELD.y + FIELD.h * 0.68].forEach(y => {
       el("line", {
         x1: x, y1: y - 5, x2: x, y2: y + 5,
@@ -995,10 +1021,10 @@ function drawField() {
     });
   }
 
-  // 边线
+  // 边线（细柔光，避免亮白粗边）
   el("rect", {
-    x: FIELD.x - EZ_W, y: FIELD.y - 2, width: FIELD.w + EZ_W * 2, height: FIELD.h + 4,
-    fill: "none", stroke: "#dfeee6", "stroke-width": 3
+    x: FIELD.x - EZ_W, y: FIELD.y - 1, width: FIELD.w + EZ_W * 2, height: FIELD.h + 2,
+    fill: "none", stroke: "rgba(255,255,255,.22)", "stroke-width": 1.5
   }, g);
 
   // 开球线（LOS）虚线
@@ -2093,12 +2119,13 @@ function buildTreeRoute(form, player, mirror, type) {
   // 内侧方向：球员在上半场（y 小）内侧向下(+y)；下半场内侧向上(-y)
   const midY = FIELD.y + FIELD.h / 2;
   const dirY = base.y < midY ? 1 : -1;
+  const s = UY / 8.6;   // 路线树以 8.6 单位/码 编写，按当前规格缩放（码距不变）
   return {
     id: state.nextId++,
     side: player ? player.side : state.side,
     type: type || "run",
     sharp: true,   // 标准路线一律锐角直画（直线段保真折角，不平滑）
-    pts: form.pts.map(p => ({ x: base.x + p[0] * dirX, y: base.y + p[1] * dirY })),
+    pts: form.pts.map(p => ({ x: base.x + p[0] * s * dirX, y: base.y + p[1] * s * dirY })),
     player: player ? player.id : null
   };
 }
@@ -3962,6 +3989,8 @@ document.querySelectorAll("#sideGroup button").forEach(b =>
 $("#selFormat").onchange = e => {
   pushUndo();
   state.format = parseInt(e.target.value, 10);
+  applyFormatDims();
+  drawField();
   renderFormationButtons();
   // 切换人制必须清场，否则会出现不同人制的球员混在场上
   state.players = [];
@@ -4487,6 +4516,7 @@ $("#playCode").addEventListener("input", updateStats);
 function boot() {
   loadFormStore();
   loadPlays();
+  applyFormatDims();
   drawField();
   renderFormationButtons();
   // 默认加载一个进攻阵型
