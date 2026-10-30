@@ -2329,8 +2329,15 @@ $("#board").addEventListener("wheel", e => {
   e.preventDefault();
   const r = $("#board").getBoundingClientRect();
   const sx = (e.clientX - r.left) / r.width, sy = (e.clientY - r.top) / r.height;
-  const cx = viewBox.x + sx * viewBox.w;
-  const cy = viewBox.y + sy * viewBox.h;
+  let cx, cy;
+  if (viewPortrait) {
+    // 竖屏：屏幕分率 → root → board（rootX=board y, rootY=1000-board x）
+    cy = viewBox.y + sx * viewBox.h;
+    cx = 1000 - ((1000 - (viewBox.x + viewBox.w)) + sy * viewBox.w);
+  } else {
+    cx = viewBox.x + sx * viewBox.w;
+    cy = viewBox.y + sy * viewBox.h;
+  }
   zoomView(e.deltaY < 0 ? 0.85 : 1.18, cx, cy);
 }, { passive: false });
 
@@ -3756,14 +3763,23 @@ $("#board").addEventListener("pointerdown", e => {
 window.addEventListener("pointermove", e => {
   if (!viewPan) return;
   const r = $("#board").getBoundingClientRect();
-  const dx = (e.clientX - viewPan.x) / r.width * viewBox.w;
-  const dy = (e.clientY - viewPan.y) / r.height * viewBox.h;
-  if (Math.abs(e.clientX - viewPan.x) + Math.abs(e.clientY - viewPan.y) > 4) {
-    viewPan.moved = true;
+  const mdx = e.clientX - viewPan.x, mdy = e.clientY - viewPan.y;
+  if (Math.abs(mdx) + Math.abs(mdy) <= 4) return;
+  viewPan.moved = true;
+  if (viewPortrait) {
+    // 竖屏：屏幕X←board y、屏幕Y←board x（且反向）——拖哪走哪（与手指滑动一致）
+    const dRootX = mdx / r.width * viewBox.h;
+    const dRootY = mdy / r.height * viewBox.w;
+    viewBox.y = viewPan.vy - dRootX;
+    viewBox.x = viewPan.vx + dRootY;
+  } else {
+    // 横屏：内容随手（自然拖拽）
+    const dx = mdx / r.width * viewBox.w;
+    const dy = mdy / r.height * viewBox.h;
     viewBox.x = viewPan.vx - dx;
     viewBox.y = viewPan.vy - dy;
-    applyViewBox();
   }
+  applyViewBox();
 });
 window.addEventListener("pointerup", () => { setTimeout(() => { viewPan = null; }, 0); });
 
