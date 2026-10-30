@@ -1993,8 +1993,9 @@ function render() {
 
     const numStr = String(p.num);
     const t = el("text", {
-      x: p.x, y: p.y + 4.2,
-      transform: txtRot(p.x, p.y + 4.2),
+      x: p.x, y: p.y,
+      transform: txtRot(p.x, p.y),
+      "dominant-baseline": "central",
       "text-anchor": "middle", "font-size": numStr.length >= 4 ? 9.5 : numStr.length === 3 ? 11 : 12.5,
       fill: isOff ? COLORS.offText : COLORS.defText
     }, g);
