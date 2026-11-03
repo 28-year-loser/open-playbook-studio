@@ -2504,7 +2504,9 @@ function rehStep(reh, st, dt) {
       const prog = reh.progress[String(b.fromId)] || 0;
       const routeF = reh.routes[String(b.fromId)];
       const total = routeF ? routeF.total : 0;
-      const reached = total > 1 ? (prog / total >= b.releaseAt) : (reh.t >= b.releaseAt * 1.5);
+      // 出手速度与攻速联动：攻速越快，无路线时的时间窗等比压缩
+      const relWin = b.releaseAt * 1.5 * (90 / Math.max(1, reh.speedOff));
+      const reached = total > 1 ? (prog / total >= b.releaseAt) : (reh.t >= relWin);
       if (!b.launched && reached) {
         b.launched = true;
         b.launchFrom = { x: fromP.x, y: fromP.y };
@@ -2512,7 +2514,9 @@ function rehStep(reh, st, dt) {
       if (b.launched) {
         if (!b.launchFrom) b.launchFrom = { x: fromP.x, y: fromP.y };
         const dist = Math.max(1, Math.hypot(toP.x - b.launchFrom.x, toP.y - b.launchFrom.y));
-        b.t = Math.min(1, b.t + (reh.ballSpeed * dt) / dist);
+        // 球速与攻速联动（默认攻速 90 时 = 设计球速，调快攻速球速等比加快）
+        const bSpeed = reh.ballSpeed * (reh.speedOff / 90);
+        b.t = Math.min(1, b.t + (bSpeed * dt) / dist);
         b.pos = { x: b.launchFrom.x + (toP.x - b.launchFrom.x) * b.t, y: b.launchFrom.y + (toP.y - b.launchFrom.y) * b.t };
         if (b.t >= 1) { b.mode = "carry"; b.carrierId = b.toId; }
       } else {
