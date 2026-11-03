@@ -2409,7 +2409,7 @@ function rehAddPassBall(reh, fromId, toId, opts) {
   opts = opts || {};
   const b = {
     id: "b-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 100),
-    mode: "pass", fromId: fromId, toId: toId,
+    mode: "pass", mode0: "pass", fromId: fromId, toId: toId,
     releaseAt: opts.releaseAt == null ? 0.5 : opts.releaseAt,
     t: 0, launched: false, launchFrom: null, pos: null
   };
@@ -2419,7 +2419,7 @@ function rehAddPassBall(reh, fromId, toId, opts) {
 function rehAddCarryBall(reh, carrierId) {
   const b = {
     id: "b-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 100),
-    mode: "carry", carrierId: carrierId, pos: null
+    mode: "carry", mode0: "carry", carrierId: carrierId, pos: null
   };
   reh.balls.push(b);
   return b;
@@ -2431,7 +2431,12 @@ function rehReset(reh) {
   reh.t = 0; reh.done = false;
   reh.zones.forEach(z => { z.triggered = false; z.targetBall = null; });
   Object.keys(reh.progress).forEach(k => delete reh.progress[k]);
-  reh.balls.forEach(b => { b.t = 0; b.launched = false; b.launchFrom = null; b.pos = null; });
+  reh.balls.forEach(b => {
+    b.t = 0; b.launched = false; b.launchFrom = null; b.pos = null;
+    // 传球球到达后会转为携带——重置时必须还原为传球球（重播 BUG）
+    if ((b.mode0 || b.mode) === "pass") { b.mode = "pass"; delete b.carrierId; }
+    else b.mode = "carry";
+  });
 }
 function rehPosAlong(route, walked) {
   const pts = route.pts;
