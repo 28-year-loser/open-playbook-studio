@@ -2567,9 +2567,9 @@ function drawRehBalls(gP) {
   });
 }
 
-// 演练期间锁定球员站位调整（拖动/删除/撤销/换阵型/添加一律禁止）
+// 演练【播放中】锁定球员站位调整；演练未开始/暂停时可正常调整站位与路线
 function rehLock() {
-  if (reh) { toast("演练期间不可调整球员站位"); return true; }
+  if (reh && reh.playing) { toast("演练播放中不可调整球员站位"); return true; }
   return false;
 }
 
@@ -3497,8 +3497,11 @@ let ptDrag = null;
 let zDrag = null;
 
 function startDrag(e, p) {
-  // 战术演练模式：点按=选择 QB / 传球目标 / 持球人，不拖动
-  if (reh) { if (rehPickMode) handlePickTap(p); return; }
+  // 战术演练模式：选球对象优先；播放中锁站位，未开始/暂停可拖动调整
+  if (reh) {
+    if (rehPickMode) { handlePickTap(p); return; }
+    if (reh.playing) return;
+  }
   // 区域绘制/路线绘制进行中：不劫持球员点击（冒泡给画布处理画区域/加折点）
   if (state.zoneDraft || state.drawing) return;
   if (e.button === 2) return; // 右键不开启拖拽/画线，冒泡给 contextmenu 收尾路线
