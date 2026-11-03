@@ -2576,6 +2576,24 @@ function drawRehBalls(gP) {
   });
 }
 
+// 流程引导：按演练阶段给出下一步操作提示
+function rehGuide() {
+  if (!reh) return;
+  const hint = $("#rehHint"), st = $("#status");
+  let txt;
+  if (reh.done) {
+    txt = "演练完成 — 点「⟲ 重播」再来一次，或「✕ 退出演练」";
+  } else if (reh.playing) {
+    txt = "播放中 — 球员已锁定；空白处拖动平移视角、滚轮缩放；「⏸ 暂停」后可调整路线与站位";
+  } else if (!reh.balls.length) {
+    txt = "第一步：点「🏈 球」添加传球球（选 QB 与目标）或携带球；然后 ▶ 播放";
+  } else {
+    txt = "准备就绪 — 点「▶ 播放」开始演练（播放前可拖球员/画路线做最后调整）";
+  }
+  if (hint) hint.textContent = txt;
+  if (st) st.innerHTML = "<b>战术演练</b> — " + txt;
+}
+
 // 演练【播放中】锁定球员站位调整；演练未开始/暂停时可正常调整站位与路线
 function rehLock() {
   if (reh && reh.playing) { toast("演练播放中不可调整球员站位"); return true; }
@@ -2590,7 +2608,7 @@ function enterRehearsal() {
   refreshSelPanel();
   $("#rehBar").style.display = "";
   updateRehBallCount();
-  $("#status").innerHTML = "<b>战术演练</b> — 点「🏈 球」选择 QB 与传球目标，▶ 播放";
+  rehGuide();
   rehLastTs = 0;
   const tick = (ts) => {
     if (!reh) return;
@@ -2601,7 +2619,7 @@ function enterRehearsal() {
       if (reh.done) {
         reh.playing = false;
         $("#rehPlay").textContent = "▶ 播放";
-        $("#status").innerHTML = "<b>演练完成</b> — 「⟲ 重播」再来，或「✕ 退出演练」";
+        rehGuide();
       }
     }
     rehLastTs = ts;
@@ -2659,6 +2677,7 @@ function handlePickTap(p) {
     $("#ballModal").classList.add("show");
     renderBallList();
     toast("携带球：" + p.num);
+    rehGuide();
     return;
   }
   if (rehPickMode === "pass1") {
@@ -2677,7 +2696,7 @@ function handlePickTap(p) {
     $("#ballModal").classList.add("show");
     renderBallList();
     toast("传球目标：" + p.num);
-    $("#status").innerHTML = "<b>战术演练</b> — 点「🏈 球」管理，▶ 播放";
+    rehGuide();
   }
 }
 
@@ -3510,7 +3529,11 @@ function startDrag(e, p) {
   // 战术演练模式：选球对象优先；播放中锁站位，未开始/暂停可拖动调整
   if (reh) {
     if (rehPickMode) { handlePickTap(p); return; }
-    if (reh.playing) return;
+    if (reh.playing) {
+      if (state.tool === "run" || state.tool === "pass" || state.tool === "block")
+        toast("播放中不可画线 — 点「⏸ 暂停」后再画");
+      return;
+    }
   }
   // 区域绘制/路线绘制进行中：不劫持球员点击（冒泡给画布处理画区域/加折点）
   if (state.zoneDraft || state.drawing) return;
@@ -3563,7 +3586,8 @@ function startDrag(e, p) {
 
 $("#board").addEventListener("pointerdown", e => {
   // 战术演练模式：画布不参与画线/区域/折点
-  if (reh) return;
+  // 演练：仅【播放中】锁定画线/折点/区域；未开始/暂停可正常绘制路线（含一笔画与折点编辑）
+  if (reh && reh.playing) return;
   // 折点手柄拖动
   const handle = e.target.closest && e.target.closest(".route-handle");
   if (handle) {
@@ -3841,17 +3865,18 @@ window.addEventListener("pointermove", e => {
 window.addEventListener("pointerup", () => { setTimeout(() => { viewPan = null; }, 0); });
 
 $("#board").addEventListener("pointerup", e => {
-  if (viewPan && viewPan.moved) { viewPan = null; return; }
-  // 一笔画：拖动画完路线后抬手 = 立即自动结束并确认（无需双击）
+  // 画线收尾优先于平移标记（防止快速连贯手势中残留的 viewPan 吞掉抬手事件）
   if (state.drawing) {
     const dr = state.drawing;
     dr._press = false;
+    viewPan = null;
     if (dr._stroke) {
       finalizeDrawing({ commitEnd: true });
       return;
     }
     return; // 点按折点模式：等待继续加点或显式收尾
   }
+  if (viewPan && viewPan.moved) { viewPan = null; return; }
   // 折点拖动结束
   if (ptDrag) {
     if (ptDrag.moved) {
@@ -4210,6 +4235,7 @@ $("#rehPlay").onclick = () => {
   if (reh.done) rehReset(reh);
   reh.playing = !reh.playing;
   $("#rehPlay").textContent = reh.playing ? "⏸ 暂停" : "▶ 播放";
+  rehGuide();
 };
 $("#rehReset").onclick = () => {
   if (!reh) return;
