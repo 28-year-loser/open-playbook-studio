@@ -896,12 +896,14 @@ function applySnap(s) {
   render(); updateStats();
 }
 function undo() {
+  if (rehLock()) return;
   if (!undoStack.length) return toast("没有可撤销的操作");
   redoStack.push(snapshot());
   applySnap(undoStack.pop());
   updateButtons(); toast("已撤销");
 }
 function redo() {
+  if (rehLock()) return;
   if (!redoStack.length) return toast("没有可重做的操作");
   undoStack.push(snapshot());
   applySnap(redoStack.pop());
@@ -1931,6 +1933,7 @@ function nflizeNums(nums, pts) {
 }
 
 function applyFormation(form, side, skipUndo) {
+  if (rehLock()) return;
   const err = validateFormation(form, state.format);
   if (err) {
     toast("⚠️ " + err);
@@ -2031,6 +2034,7 @@ function render() {
     g.addEventListener("pointerdown", e => startDrag(e, p));
     g.addEventListener("dblclick", e => {
       e.stopPropagation();
+      if (rehLock()) return;
       pushUndo();
       state.players = state.players.filter(x => x.id !== p.id);
       state.routes = state.routes.filter(r => r.player !== p.id);
@@ -2563,10 +2567,18 @@ function drawRehBalls(gP) {
   });
 }
 
+// 演练期间锁定球员站位调整（拖动/删除/撤销/换阵型/添加一律禁止）
+function rehLock() {
+  if (reh) { toast("演练期间不可调整球员站位"); return true; }
+  return false;
+}
+
 function enterRehearsal() {
   if (state.drawing || state.zoneDraft) { toast("请先完成当前绘制"); return; }
   reh = createRehearsal(state);
   rehBase = state.players.map(p => ({ id: p.id, x: p.x, y: p.y }));
+  state.selected = null; state.selectedRoute = null;
+  refreshSelPanel();
   $("#rehBar").style.display = "";
   updateRehBallCount();
   $("#status").innerHTML = "<b>战术演练</b> — 点「🏈 球」选择 QB 与传球目标，▶ 播放";
@@ -2872,6 +2884,7 @@ function pushPlayerHist(p, x, y) {
   refreshSelPanel();
 }
 function undoPlayer(p) {
+  if (rehLock()) return;
   if (!p || !p.history || !p.history.length) return false;
   const prev = p.history.pop();
   const dx = prev.x - p.x, dy = prev.y - p.y;
@@ -2891,6 +2904,7 @@ function undoPlayer(p) {
   return true;
 }
 function undoPlayerAll(p) {
+  if (rehLock()) return;
   if (!p || !p.history || !p.history.length) return 0;
   const n = p.history.length;
   const first = p.history[0];
@@ -3198,6 +3212,7 @@ PM.addEventListener("click", e => {
     const n = undoPlayerAll(p);
     toast(n ? `已把 ${p.num} 退回初始位置（共 ${n} 步）` : "该球员没有可撤销的移动");
   } else if (act === "del") {
+    if (rehLock()) return;
     pushUndo();
     state.players = state.players.filter(x => x.id !== p.id);
     state.routes = state.routes.filter(r => r.player !== p.id);
@@ -4080,6 +4095,7 @@ $("#btnUndoPlayerAll").onclick = () => {
   toast(`已把 ${p.num} 退回初始位置（共 ${n} 步）`);
 };
 $("#btnDelPlayer").onclick = () => {
+  if (rehLock()) return;
   const p = state.players.find(x => x.id === state.selected);
   if (!p) return toast("请先选中一个球员");
   pushUndo();
@@ -4232,7 +4248,7 @@ $("#ballList").addEventListener("click", e => {
   }
 });
 
-$("#btnAddPlayer").onclick = () => openNameDialog("add", null);
+$("#btnAddPlayer").onclick = () => { if (rehLock()) return; openNameDialog("add", null); };
 $("#nmCancel").onclick = () => $("#nameModal").classList.remove("show");
 $("#nmOk").onclick = nmSubmit;
 $("#nmInput").addEventListener("keydown", e => {
