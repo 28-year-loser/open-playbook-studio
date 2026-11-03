@@ -3807,7 +3807,9 @@ $("#board").addEventListener("pointermove", e => {
 // 视图平移：空白处拖动移动视口（点按仍为取消选中）
 let viewPan = null;
 $("#board").addEventListener("pointerdown", e => {
-  if (state.drawing || state.zoneDraft || state.tool !== "select" || reh) return;
+  // 演练中也可平移视角（只锁球员操作，不锁视角）；绘制/选球中除外
+  if (state.drawing || state.zoneDraft || state.tool !== "select") return;
+  if (reh && rehPickMode) return;
   const onPlayer = e.target.closest && e.target.closest(".player");
   const onHandle = e.target.closest && e.target.closest(".route-handle");
   const onZone = e.target.closest && e.target.closest(".zone-cov");
