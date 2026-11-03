@@ -713,7 +713,7 @@ aside::-webkit-scrollbar-corner,
 <div class="modal-mask" id="ballModal">
   <div class="modal-card">
     <div class="modal-title">🏈 橄榄球对象</div>
-    <div class="modal-sub">点按传球球可切换出手时机（30%/50%/70%/90%）；删除点行内 🗑</div>
+    <div class="modal-sub">出手时机 = QB 跑到路线百分之几时传球：30% 快出手 / 50% 常规 / 70% 等拉开 / 90% 等跑满——点按球行切换；删除点行内 🗑</div>
     <div id="ballList"></div>
     <div class="row" style="margin-top:12px;gap:8px">
       <button class="btn primary" style="flex:1" id="ballAddPass">🎯 传球球（选 QB 与目标）</button>
@@ -2634,8 +2634,9 @@ function renderBallList() {
       const p = state.players.find(x => String(x.id) === String(id));
       return p ? p.num : "?";
     };
+    const relNote = v => ({ 0.3: "快出手", 0.5: "常规", 0.7: "等拉开", 0.9: "等跑满" })[v] || "";
     const desc = b.mode === "pass"
-      ? `🏈 传球 ${nameOf(b.fromId)} → ${nameOf(b.toId)} · 出手 ${(b.releaseAt * 100) | 0}%`
+      ? `🏈 传球 ${nameOf(b.fromId)} → ${nameOf(b.toId)} · 出手 ${(b.releaseAt * 100) | 0}%·${relNote(b.releaseAt)}`
       : `🏈 携带 ${nameOf(b.carrierId)}`;
     return `<div class="item" style="display:flex;align-items:center;gap:8px;background:#223041;border:1px solid #35485c;border-radius:8px;padding:9px 11px;margin-bottom:7px;cursor:pointer" data-bcycle="${b.id}">
       <span style="flex:1">${desc}</span>
@@ -4250,7 +4251,8 @@ $("#ballList").addEventListener("click", e => {
     if (b && b.mode === "pass") {
       const seq = [0.3, 0.5, 0.7, 0.9];
       b.releaseAt = seq[(seq.indexOf(b.releaseAt) + 1) % seq.length] || 0.5;
-      toast("出手时机 " + ((b.releaseAt * 100) | 0) + "%");
+      const rn = ({ 0.3: "快出手", 0.5: "常规", 0.7: "等拉开", 0.9: "等跑满" })[b.releaseAt] || "";
+      toast("出手时机 " + ((b.releaseAt * 100) | 0) + "%·" + rn);
       renderBallList();
     }
   }
