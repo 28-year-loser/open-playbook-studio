@@ -637,7 +637,7 @@ aside::-webkit-scrollbar-corner,
     <div class="reh-row">
       <span class="reh-title">🎬 战术演练</span>
       <button class="reh-btn main" id="rehPlay">▶ 播放</button>
-      <button class="reh-btn" id="rehReset">⟲ 重播</button>
+      <button class="reh-btn" id="rehReset">⟲ 复原</button>
       <button class="reh-btn" id="rehBalls">🏈 球 <span id="rehBallCount">0</span></button>
       <label class="reh-slider">攻速<input type="range" id="rehSpeedOff" min="40" max="260" value="90"></label>
       <label class="reh-slider">守速<input type="range" id="rehSpeedDef" min="40" max="260" value="80"></label>
@@ -2582,7 +2582,7 @@ function rehGuide() {
   const hint = $("#rehHint"), st = $("#status");
   let txt;
   if (reh.done) {
-    txt = "演练完成 — 点「⟲ 重播」再来一次，或「✕ 退出演练」";
+    txt = "演练完成 — 点「⟲ 复原」回到开球前状态，或「✕ 退出演练」";
   } else if (reh.playing) {
     txt = "播放中 — 球员已锁定；空白处拖动平移视角、滚轮缩放；「⏸ 暂停」后可调整路线与站位";
   } else if (!reh.balls.length) {
@@ -4239,14 +4239,23 @@ $("#rehPlay").onclick = () => {
 };
 $("#rehReset").onclick = () => {
   if (!reh) return;
+  // 复原：所有球员回到开球前站位，所有球回到开球前状态（球在 QB/持球人手上）
   if (rehBase) rehBase.forEach(b => {
     const p = state.players.find(x => String(x.id) === String(b.id));
     if (p) { p.x = b.x; p.y = b.y; }
   });
   rehReset(reh);
-  reh.playing = true;
-  $("#rehPlay").textContent = "⏸ 暂停";
+  reh.playing = false;
+  reh.done = false;
+  $("#rehPlay").textContent = "▶ 播放";
+  reh.balls.forEach(b => {
+    const holdId = (b.mode0 || b.mode) === "pass" ? b.fromId : b.carrierId;
+    const p = state.players.find(x => String(x.id) === String(holdId));
+    if (p) b.pos = { x: p.x, y: p.y };
+  });
   render();
+  rehGuide();
+  toast("已复原到开球前状态");
 };
 $("#rehBalls").onclick = () => {
   if (!reh) return;
